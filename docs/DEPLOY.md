@@ -118,7 +118,13 @@ echo | openssl s_client -connect 10.37.2.208:18080 2>/dev/null \
   | openssl x509 -noout -text | grep -A1 "Subject Alternative Name"
 ```
 
-看到 `IP Address:10.37.2.208` 就对了。启动日志里也会打出提示(没设 `CERT_NAMES` 时)。
+要看到的是 **`IP Address:10.37.2.208`**。
+
+> ⚠️ **必须是 `IP Address:`,不能是 `DNS:10.37.2.208`。**
+> 证书的 SAN 分两种条目:`DNS:` 只能匹配主机名,`IP Address:` 才能匹配 IP 地址。
+> 按 RFC 6125,浏览器拿 IP 访问时**只认 `IP Address:` 条目** —— 写成 `DNS:` 等于没写,
+> 浏览器照样报"证书名称不匹配",WebSocket 照样被拦死。
+> (旧版本的 `CERT_NAMES` 正是这个毛病:填进去的 IP 一律被当成域名。现已修好。)
 
 > **iPad 还要多一步**:SAN 对上只是"名字对了",iOS 还要求证书**被信任**,否则 WebSocket 照样被拦。
 > Safari 访问一次 `https://<IP>:18080/` 下载证书 → 设置 → 通用 → VPN与设备管理 → 安装 →

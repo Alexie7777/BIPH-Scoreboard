@@ -163,6 +163,10 @@ docker compose exec scoreboard sh -c 'rm -f /data/cert/server.crt /data/cert/ser
 docker compose up -d
 ```
 
+> 验证时要看 **`IP Address:10.37.2.208`**,不是 `DNS:10.37.2.208`。
+> 证书的 SAN 分两种条目:`DNS:` 只匹配主机名,`IP Address:` 才匹配 IP 地址;
+> 浏览器拿 IP 访问时只认后者(RFC 6125),写成 `DNS:` 等于没写。
+
 > **更好的做法**:让学校 IT 签发 `scoreboard.xxx.edu` 的证书,挂进来即可:
 > ```yaml
 > environment:
@@ -237,7 +241,7 @@ docker compose up -d
 npm install
 npm run dev:server   # 后端 :8080
 npm run dev:client   # 前端 :5173(已代理 /api 与 /ws)
-npm test             # 174 项测试,含端到端断网验证、场馆语言全场一致、蜂鸣器波形验证、操作提示渲染、暂停倒计时提示判定、管理员密钥弹窗渲染、墙钟渲染、大屏队徽渲染、开赛倒计时与 i18n 一致性验证
+npm test             # 180 项测试,含端到端断网验证、场馆语言全场一致、蜂鸣器波形验证、操作提示渲染、暂停倒计时提示判定、管理员密钥弹窗渲染、墙钟渲染、大屏队徽渲染、自签证书 SAN 条目归属、开赛倒计时与 i18n 一致性验证
 npm run build        # 全量构建
 npm run package:docker   # 打成离线部署包(镜像 tar + compose + 部署说明),见 docs/DEPLOY.md
 ```
@@ -272,6 +276,7 @@ node server\dist\index.js
 | `server/test/match.test.ts` (32) | 命令归约层:建赛/比分/犯规/暂停计数/换边/置 FINAL/状态回退后节次标签恢复/`match.update` 不得改比分、**换边时进攻权跟着队伍走**、**请求暂停(耗额度+停两个钟+起倒计时)/额度用尽拒绝/重复请求不重复计时/结束暂停不自动恢复比赛钟/继续比赛把误按启动的表停回去/重置与 FINAL 一并收掉倒计时**、**命令拒绝原因(额度用尽/暂停进行中)**、**计划开赛时间:可设置/可清空/局部补丁不冲掉它/格式不对当场拒绝** |
 | `server/test/e2e.test.ts` (27) | 真实服务器 + 真实 WebSocket:**拔网线 5 秒后大屏计时依然准确**、重连自愈、命令幂等、只读角色越权拦截、**控制端按蜂鸣 → 大屏收到 buzzer 事件**、**二维码接口免管理员密钥且控制台链接自带控制令牌**、**改本场参数:控制令牌即可**、**改队名/队色:控制令牌即可(不锁管理员密钥)**、**破坏性操作仍然只认管理员密钥**、**局部补丁不会冲掉其他规则**、**请求暂停 → 大屏收到倒计时锚点 → 结束暂停 → 倒计时撤下**、**「继续比赛」撤下倒计时并把误按启动的表停回去**、**改暂停时长后下一次请求暂停按新时长走**、**命令回执如实反映结果(暂停中再请求 → ok=false + 原因)**、**设置开赛时间 → 大屏读到,格式不对当场 400**、**重置/删除:不带密钥或带错密钥都 401 且比赛没被动过,带对才真的执行**、**场馆语言:改一场 → 别的场与管理台一起改(WS 与 REST 两条路都验)/新比赛继承/非法语言当场 400** |
 | `server/test/config.test.ts` (3) | 管理员密钥:**没设 `ADMIN_KEY` 时就是默认的 `1818`**、环境变量可覆盖、留空视同没设 |
+| `server/test/certs.test.ts` (6) | 自签证书的 SAN 条目归属:**`CERT_NAMES` 里的 IP 必须进 `IP Address:` 条目(不能是 `DNS:`,否则浏览器拿 IP 访问时匹配不上,WebSocket 会被直接拦死)**、域名照旧进 DNS 条目、域名与 IP 混填各归各位、IPv6 也进 IP 条目;`isIpLiteral` 认得出 IP 认不出域名 |
 | `client/src/lib/horn.test.ts` (8) | 蜂鸣器波形:**单声连续无断崖**(防止改回"哔—哔—")、基频 165Hz、谐波峰、不削波、起音速度、时长 |
 | `client/src/lib/toasts.test.ts` (10) | 操作提示文案:加分/犯规/暂停/启停/换节/进攻权各自的文案;**提示只描述动作、不写会过时的比分**;中英文都拼得出来 |
 | `client/src/lib/timeoutAlert.test.ts` (10) | 暂停倒计时提示判定:刚开始不提示、进入最后 5 秒逐秒读秒(同秒不刷屏)、归零只报一次、**「继续比赛」提前结束不算"时间到"**、最后 5 秒内按仍报时间到、倒计时重置撤掉提示 |
@@ -348,7 +353,7 @@ BIPH-Scoreboard/
 │   ├── routes.ts           REST 路由
 │   ├── certs.ts            自签证书生成
 │   └── index.ts            启动入口
-├── server/test/            98 项测试(clock / match / config / e2e)
+├── server/test/            104 项测试(clock / match / config / certs / e2e)
 ├── client/src/
 │   ├── pages/              Dashboard / MatchSetup / Control / Display
 │   ├── templates/          simple / led / broadcast 三套大屏模板(共用一套 DOM)
