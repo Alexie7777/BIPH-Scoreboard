@@ -63,13 +63,18 @@ RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 COPY --from=server-build /app/shared/dist ./shared/dist
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=client-build /app/client/dist ./client/dist
+COPY scripts/healthcheck.mjs ./scripts/healthcheck.mjs
 
 RUN mkdir -p /data
 VOLUME ["/data"]
 EXPOSE 8080
 
-# 健康检查:直接打 /api/health,不依赖 curl(warm 镜像里没有)
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8080)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# 健康检查:走 scripts/healthcheck.mjs。
+# 服务默认只听 HTTPS(自签证书),用 http 探会永远 unhealthy;
+# 那个脚本 https 优先、http 兜底,两种部署模式都能判对。
+# start-period 给到 60s:小内存机器上 Node 冷启动可能要半分钟,
+# 否则容器会在还没起来时就被判死。
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+  CMD node scripts/healthcheck.mjs
 
 CMD ["node", "server/dist/index.js"]

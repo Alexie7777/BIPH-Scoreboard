@@ -35,15 +35,14 @@ services:
     # 在有 AP 隔离的校园网里更容易被手机访问到。
     # network_mode: host
     healthcheck:
-      test:
-        - CMD
-        - node
-        - -e
-        - "fetch('http://127.0.0.1:8080/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      # 与 Dockerfile 里的一致:服务默认只听 HTTPS(自签证书),
+      # 用 http 探会永远 unhealthy。脚本 https 优先、http 兜底。
+      # start-period 给到 60s,小内存机器上冷启动慢,别一上来就判死。
+      test: ["CMD", "node", "scripts/healthcheck.mjs"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 60s
 
 volumes:
   biph-data:
