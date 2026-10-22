@@ -142,6 +142,27 @@ iPad Safari 的 **Service Worker**(PWA 离线外壳)与 **Wake Lock**(防锁屏)
 
 > 设置 → 通用 → 关于本机 → 证书信任设置 → 打开对应证书的完全信任开关
 
+### ⚠️ 用 Docker 部署必看:`CERT_NAMES` 不填,控制台一定连不上
+
+自签证书的 SAN 来自 `os.networkInterfaces()`。在 Docker 里它只能看到**容器自己的网卡**(172.x),
+看不到宿主机的 IP,于是浏览器会报**证书名称不匹配**:
+
+- 页面:点「继续前往」还能看
+- **控制台的 WebSocket:同样被拦,而且没有「继续前往」可点 → 永远「连接中断」**
+- 大屏其实也连不上,只是有 REST 兜底,比分照常显示,所以不容易发现
+
+```yaml
+# docker-compose.yml —— 换成你的宿主机 IP
+environment:
+  CERT_NAMES: "10.37.2.208"
+```
+
+```bash
+# 旧证书缓存在数据卷里不会自动重签,删掉再重启
+docker compose exec scoreboard sh -c 'rm -f /data/cert/server.crt /data/cert/server.key'
+docker compose up -d
+```
+
 > **更好的做法**:让学校 IT 签发 `scoreboard.xxx.edu` 的证书,挂进来即可:
 > ```yaml
 > environment:

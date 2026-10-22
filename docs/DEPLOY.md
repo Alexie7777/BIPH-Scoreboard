@@ -85,7 +85,46 @@ docker compose logs -f scoreboard
 > sudo git clone git@github-biph:Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
 > ```
 
-### 1.4 以后更新
+### 1.4 ⚠️ 必做:告诉证书你的宿主机 IP(`CERT_NAMES`)
+
+**这一步不做,控制台一定连不上。**
+
+自签证书的 SAN 来自 `os.networkInterfaces()`。在 Docker 里,它只能看到**容器自己的网卡**
+(172.x),看不到宿主机的 IP。于是:
+
+- 浏览器打开 `https://<宿主机IP>:18080/` → 报**证书名称不匹配** → 点「继续前往」还能看页面
+- 控制台连 `wss://<宿主机IP>:18080/ws/...` → 同样的证书错误,**WebSocket 没有「继续前往」可点**
+  → 连接被浏览器直接拦死,控制台永远显示「连接中断」
+- 大屏其实也连不上,只是它有 REST 兜底,比分照样显示,所以不容易发现
+
+**做法**:
+
+```yaml
+# docker-compose.yml
+environment:
+  CERT_NAMES: "10.37.2.208"        # 换成你的宿主机 IP(可逗号分隔写多个)
+```
+
+```bash
+# 旧证书缓存在数据卷里,不会自动重签 —— 删掉再重启
+docker compose exec scoreboard sh -c 'rm -f /data/cert/server.crt /data/cert/server.key'
+docker compose up -d
+```
+
+**验证 SAN 已经包含这个 IP**:
+
+```bash
+echo | openssl s_client -connect 10.37.2.208:18080 2>/dev/null \
+  | openssl x509 -noout -text | grep -A1 "Subject Alternative Name"
+```
+
+看到 `IP Address:10.37.2.208` 就对了。启动日志里也会打出提示(没设 `CERT_NAMES` 时)。
+
+> **iPad 还要多一步**:SAN 对上只是"名字对了",iOS 还要求证书**被信任**,否则 WebSocket 照样被拦。
+> Safari 访问一次 `https://<IP>:18080/` 下载证书 → 设置 → 通用 → VPN与设备管理 → 安装 →
+> 设置 → 通用 → 关于本机 → **证书信任设置** → 打开「完全信任」(这步不能漏)。
+
+### 1.5 以后更新
 
 ```bash
 cd /opt/BIPH-Scoreboard
@@ -99,6 +138,9 @@ cd /opt/BIPH-Scoreboard
 ```
 
 > 数据在 Docker 卷 `biph-data` 里,**重建镜像不会丢比赛数据**。
+>
+> ⚠️ 改过 `CERT_NAMES` 或换过宿主机 IP 之后,记得**再删一次旧证书**:
+> `docker compose exec scoreboard sh -c 'rm -f /data/cert/server.*' && docker compose up -d`
 
 ---
 
@@ -279,6 +321,8 @@ sudo usermod -aG docker $USER    # 重新登录生效
 | 拉 GitHub 太慢/超时 | 用 `git clone --depth 1`;或把仓库搬到 Gitee / GitCode / 学校自建 GitLab(Git 格式完全一样,改个 remote 就行) |
 | `docker compose build` 时拉基础镜像超时 | Docker Hub 在国内慢。给 Docker 配一个 registry mirror,或改走路径 B(离线包) |
 | 启动报 `Cannot find package '@fastify/static'` | 镜像里缺了 npm workspaces **嵌套安装**的依赖(它装在 `server/node_modules` 下,不在根 `node_modules`)。已修:runtime 阶段改为自己跑 `npm ci --omit=dev`。你若在用旧镜像,拉最新代码重新 `docker compose up -d --build` |
+| 页面能开,但**控制台一直连不上** | 证书的 SAN 里没有宿主机 IP(Docker 里只看得到容器自己的 172.x)。WebSocket 没有「继续前往」可点,被浏览器直接拦死。设 `CERT_NAMES: "<宿主机IP>"` + 删旧证书重启,详见 §1.4 |
+| 浏览器报「证书名称不匹配」 | 同上,SAN 里缺这个 IP |
 
 ---
 

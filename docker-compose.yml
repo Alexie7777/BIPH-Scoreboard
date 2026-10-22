@@ -17,7 +17,12 @@ services:
       # iPad 的 PWA 与 Wake Lock 都要求安全上下文,默认开启 HTTPS(自签证书)
       HTTPS: "true"
       # 自签证书的 SAN 里额外要包含的域名/IP,逗号分隔
-      # 例:CERT_NAMES: "scoreboard.school.edu,192.168.1.20"
+      #
+      # ⚠️ Docker 里必须填!容器内 os.networkInterfaces() 只能看到【容器】自己的
+      #    网卡(172.x),填不填宿主机 IP 都会导致浏览器报"证书名称不匹配",
+      #    而且 WebSocket 会被直接拦死 —— 控制台连不上、大屏只会显示旧比分。
+      #    填完记得删掉 /data/cert/ 下的旧证书再重启,让它按新 SAN 重签。
+      # 例:CERT_NAMES: "10.37.2.208,scoreboard.school.edu"
       CERT_NAMES: "${CERT_NAMES:-}"
       # 管理员密钥:留空即用默认值 1818(防误触用的闸门,不是安全边界);想更严就填自己的
       ADMIN_KEY: "${ADMIN_KEY:-}"

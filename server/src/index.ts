@@ -140,6 +140,19 @@ async function main(): Promise<void> {
   for (const ip of shown) app.log.info(`   ${proto}://${ip}:${config.port}`);
   app.log.info(`   管理员密钥: ${process.env.ADMIN_KEY ? '(来自 ADMIN_KEY 环境变量)' : '(默认值)'}`);
   app.log.info(`   数据目录: ${config.dataDir}`);
+
+  // 证书的坑:Docker 里 os.networkInterfaces() 只能看到【容器】自己的网卡,
+  // 所以自签证书的 SAN 里是 172.x,没有宿主机的 IP。浏览器会报"证书名称不匹配",
+  // 页面可以点"继续前往"硬过,但 WebSocket 同样被拦死 —— 控制台会一直连不上。
+  if (tls && config.extraCertNames.length === 0) {
+    app.log.info('──────────────────────────────────────────────');
+    app.log.info(' 提示:证书只包含本机网卡地址。');
+    app.log.info('       如果你在 Docker 里跑,上面那些 IP 是【容器】的(172.x),');
+    app.log.info('       宿主机 IP 不在里面 —— 浏览器会报"证书名称不匹配",');
+    app.log.info('       而且 WebSocket 会被直接拦死(控制台连不上)。');
+    app.log.info('       请在 docker-compose.yml 里设 CERT_NAMES: "<宿主机IP>",');
+    app.log.info('       然后删掉 /data/cert/ 下的旧证书再重启,让它重新签。');
+  }
   app.log.info('──────────────────────────────────────────────');
 
   const shutdown = async (): Promise<void> => {
