@@ -1,7 +1,7 @@
 # BIPH 场地管理台 —— 打包与部署手册
 
 > 面向:要在**另一台服务器**上跑起来。
-> 主推路径:**GitHub 私有仓库放源码,服务器 clone 下来现场构建**;目标服务器没有外网时改走离线部署包。
+> 主推路径:**GitHub 仓库放源码,服务器 clone 下来现场构建**;目标服务器没有外网时改走离线部署包。
 
 ---
 
@@ -9,19 +9,19 @@
 
 | 你的情况 | 走哪条 | 代价 |
 |---|---|---|
-| 目标服务器**能上外网** | **路径 A:GitHub 私有仓库** | 服务器上 `git clone` + `docker compose up -d --build`,几分钟 |
+| 目标服务器**能上外网** | **路径 A:GitHub 仓库** | 服务器上 `git clone` + `docker compose up -d --build`,几分钟 |
 | 目标服务器**没有外网**(校园网内网常见) | **路径 B:离线部署包** | 在你自己的机器上先 build 好,拷一个 tar 过去 |
-| 目标服务器**没装 Docker** | 先装 Docker,再走 A 或 B | 见 §5 |
+| 目标服务器**没装 Docker** | 先装 Docker,再走 A 或 B | 见 §6 |
 
 > 「没有外网」不只是拉不动 npm:基础镜像 `node:24-alpine` 也得从 Docker Hub 拉。
 > 所以离线服务器的正解是**在有网的机器上把镜像导出成 tar**,别指望在服务器上现场构建。
 
 ### 为什么是 Git 仓库而不是镜像仓库
 
-| | Docker Hub | GitHub 私有仓库 |
+| | Docker Hub | GitHub 仓库 |
 |---|---|---|
 | 国内拉取速度 | 官方仓库是国内最慢的,常超时,得配加速器 | clone 用 `--depth 1` 就够快,也能换 Gitee |
-| 服务器上要多存什么 | 私有镜像必须 `docker login`,会留下 PAT 凭据 | 一个**只读 deploy key**,或者干脆用只读 token |
+| 服务器上要多存什么 | 私有镜像必须 `docker login`,会留下 PAT 凭据 | **公开仓库什么都不用存**;私有仓库才需要 deploy key |
 | 限流 | 匿名拉 10 次/小时/IP(登录后 100/小时),学校 NAT 共享出口 IP 容易撞线 | 无 |
 | 升级 | 改完代码要重新 build + push + pull 镜像 | `git pull` + 重建,同一个流程 |
 | 回滚 | 换镜像 tag | `git checkout <tag>` 再重建 |
@@ -31,7 +31,7 @@
 
 ---
 
-## 1. 路径 A:GitHub 私有仓库(主推)
+## 1. 路径 A:GitHub 仓库(主推)
 
 ### 1.1 在开发机上建仓并推送
 
@@ -41,51 +41,49 @@ git init                      # 已经 init 过就跳过
 git add -A
 git commit -m "BIPH 场地管理台 v0.1.0"
 git tag v0.1.0                 # 给每个可部署版本打个 tag,回滚要用
-git remote add origin git@github.com:Alexie7777/BIPH-Scoreboard.git
+git remote add origin https://github.com/Alexie7777/BIPH-Scoreboard.git
 git push -u origin main
 git push origin v0.1.0
 ```
 
-仓库建好后记得在 GitHub 上设为 **Private**。
+仓库地址:<https://github.com/Alexie7777/BIPH-Scoreboard>
+
+> 仓库是**公开**的,所以服务器上 `git clone` 不需要任何凭据,也不需要在服务器上存 token。
 
 > 仓库里**不含**任何真实数据:`server/.smoke/`(SQLite 比赛库、私钥、上传的队徽)与
 > `docs/screenshots/`(含真实赛事名与队名的界面截图)都已在 `.gitignore` 里。
 > 推送前可以自己核一遍:`git ls-files | grep -E "smoke|screenshots|\\.db"`(应该没有输出)。
 
-### 1.2 给服务器一把只读的钥匙(deploy key)
-
-服务器 clone 私有仓库需要凭据。**推荐 deploy key** —— 一把只读的 SSH 密钥,只对这一个仓库有效:
+### 1.2 在服务器上 clone 并启动
 
 ```bash
-# 在服务器上
-ssh-keygen -t ed25519 -C "biph-server" -f ~/.ssh/biph_deploy -N ""
-cat ~/.ssh/biph_deploy.pub
-```
-
-把输出的公钥粘到 GitHub 仓库的 **Settings → Deploy keys → Add deploy key**,
-**不要勾** "Allow write access"(只读就够,服务器不需要改代码)。
-
-```bash
-# 在服务器上,告诉 git 这个仓库用哪把钥匙
-mkdir -p ~/.ssh
-cat >> ~/.ssh/config <<'EOF'
-Host github-biph
-    HostName github.com
-    User git
-    IdentityFile ~/.ssh/biph_deploy
-    IdentitiesOnly yes
-EOF
-chmod 600 ~/.ssh/config ~/.ssh/biph_deploy
-```
-
-### 1.3 在服务器上 clone 并启动
-
-```bash
-sudo git clone git@github-biph:Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
+sudo git clone https://github.com/Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
 cd /opt/BIPH-Scoreboard
 docker compose up -d --build
 docker compose logs -f scoreboard
 ```
+
+> **如果以后把仓库改回私有**,服务器 clone 就需要凭据了。推荐用 **deploy key** ——
+> 一把只读的 SSH 密钥,只对这个仓库有效,可以在 GitHub 上一键吊销:
+>
+> ```bash
+> # 在服务器上
+> ssh-keygen -t ed25519 -C "biph-server" -f ~/.ssh/biph_deploy -N ""
+> cat ~/.ssh/biph_deploy.pub   # 贴到 Settings → Deploy keys,不要勾 "Allow write access"
+>
+> # 告诉 git 这个仓库用哪把钥匙
+> cat >> ~/.ssh/config <<'EOF'
+> Host github-biph
+>     HostName github.com
+>     User git
+>     IdentityFile ~/.ssh/biph_deploy
+>     IdentitiesOnly yes
+> EOF
+> chmod 600 ~/.ssh/config ~/.ssh/biph_deploy
+>
+> # 然后用 SSH 地址 clone
+> sudo git clone git@github-biph:Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
+> ```
 
 ### 1.4 以后更新
 
@@ -259,7 +257,7 @@ sudo usermod -aG docker $USER    # 重新登录生效
 | 端口被占 | 改 `docker-compose.yml` 的 `ports`,如 `"8081:8080"` |
 | 想改管理员密钥 | `docker-compose.yml` 加 `ADMIN_KEY: "你的密钥"`,再 `docker compose up -d` |
 | 启动日志里端口/IP 不对 | `docker-compose.yml` 里 `HOST` 应为 `0.0.0.0` |
-| `git clone` 报 `Permission denied (publickey)` | 服务器的 deploy key 没配好。查 `~/.ssh/config` 里的 `Host github-biph` 段,或确认公钥已加进仓库的 Deploy keys |
+| `git clone` 报 `Permission denied (publickey)` | 只有仓库是私有时才会遇到。公开仓库直接 `git clone https://github.com/Alexie7777/BIPH-Scoreboard.git` 即可;私有仓库才需要配 deploy key(见 §1.2) |
 | `git pull` 报 `Your local changes would be overwritten` | 服务器上有人改过文件。`git stash` 或 `git checkout -- .` 放弃服务器上的改动再 pull |
 | `git pull` 报 `refusing to merge unrelated histories` | 远程换过仓库或重建过。`git pull --allow-unrelated-histories origin main` |
 | 拉 GitHub 太慢/超时 | 用 `git clone --depth 1`;或把仓库搬到 Gitee / GitCode / 学校自建 GitLab(Git 格式完全一样,改个 remote 就行) |

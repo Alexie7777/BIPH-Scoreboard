@@ -56,9 +56,11 @@ BIPH 场地管理台 改用**锚点模型**:服务端只保存「在服务器时
 ### 1. 部署(学校服务器)
 
 ```bash
-git clone git@github.com:Alexie7777/BIPH-Scoreboard.git && cd BIPH-Scoreboard
+git clone https://github.com/Alexie7777/BIPH-Scoreboard.git && cd BIPH-Scoreboard
 docker compose up -d --build
 ```
+
+> 仓库是公开的,`git clone` 不需要任何凭据,服务器上也不用存 token。
 
 > **服务器没有外网?** 那就别在服务器上现场构建 —— 构建要联网拉 npm 依赖和基础镜像。
 > 在你自己(有外网)的机器上打一个离线部署包,拷过去直接 `docker load`:
