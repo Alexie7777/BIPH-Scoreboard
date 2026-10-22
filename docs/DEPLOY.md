@@ -41,7 +41,7 @@ git init                      # 已经 init 过就跳过
 git add -A
 git commit -m "BIPH 场地管理台 v0.1.0"
 git tag v0.1.0                 # 给每个可部署版本打个 tag,回滚要用
-git remote add origin git@github.com:<你的账号>/BIPH-Scoreboard.git
+git remote add origin git@github.com:Alexie7777/BIPH-Scoreboard.git
 git push -u origin main
 git push origin v0.1.0
 ```
@@ -81,7 +81,7 @@ chmod 600 ~/.ssh/config ~/.ssh/biph_deploy
 ### 1.3 在服务器上 clone 并启动
 
 ```bash
-sudo git clone git@github-biph:<你的账号>/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
+sudo git clone git@github-biph:Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
 cd /opt/BIPH-Scoreboard
 docker compose up -d --build
 docker compose logs -f scoreboard
