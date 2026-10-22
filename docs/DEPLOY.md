@@ -148,6 +148,53 @@ cd /opt/BIPH-Scoreboard
 > ⚠️ 改过 `CERT_NAMES` 或换过宿主机 IP 之后,记得**再删一次旧证书**:
 > `docker compose exec scoreboard sh -c 'rm -f /data/cert/server.*' && docker compose up -d`
 
+### 1.6 部署后自检(照着抄一遍就知道有没有问题)
+
+**第一层:服务活着吗**
+
+```bash
+curl -k https://127.0.0.1:8080/api/health
+# 期望: {"ok":true,...,"dbWritable":true,...}
+
+curl -k -o /dev/null -w '首页 HTTP %{http_code}\n' https://127.0.0.1:8080/
+# 期望: 首页 HTTP 200
+```
+
+> 命令里的 `-k` 不能省:服务默认是 HTTPS(自签证书),不加 `-k` 会报证书错误,
+> 看起来像"服务挂了",其实是证书没被信任。
+
+**第二层:容器状态对吗**
+
+```bash
+docker compose ps
+# STATUS 列期望: Up ... (healthy)
+```
+
+> 探针走 HTTPS(自签证书校验已在探针内关闭),但也兼容你把 `HTTPS: "false"` 的情况 ——
+> 两种模式都判得对。
+> `start_period` 设的是 60 秒:小内存机器上 Node 冷启动可能要几十秒,
+> 这段时间状态是 `health: starting`,属正常,别急着判失败。
+
+**第三层:控制台真的连得上吗(关键)**
+
+浏览器能打开页面 ≠ 控制台能连上。控制台连的是 WebSocket,证书不对会被浏览器直接拦死。
+
+```bash
+# 拿一个已有比赛的控制令牌
+MID=$(curl -k -s https://127.0.0.1:8080/api/matches | jq -r '.matches[0].id')
+TOKEN=$(curl -k -s "https://127.0.0.1:8080/api/matches/$MID/qr?role=control" \
+        | grep -o 't=[^"&]*' | cut -d= -f2)
+
+# 握手
+curl -k -i -N -H "Connection: Upgrade" -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+  "https://127.0.0.1:8080/ws/$MID?role=control&t=$TOKEN" | head -1
+# 期望: HTTP/1.1 101 Switching Protocols
+```
+
+**必须看到 101。** 看到 200 或直接连不上,回 §1.4 查证书 SAN ——
+十有八九是 `CERT_NAMES` 没填对,或者填了 IP 却没删旧证书。
+
 ---
 
 ## 2. 路径 B(给没有外网的校园网服务器):离线部署包
@@ -329,15 +376,45 @@ sudo usermod -aG docker $USER    # 重新登录生效
 | 启动报 `Cannot find package '@fastify/static'` | 镜像里缺了 npm workspaces **嵌套安装**的依赖(它装在 `server/node_modules` 下,不在根 `node_modules`)。已修:runtime 阶段改为自己跑 `npm ci --omit=dev`。你若在用旧镜像,拉最新代码重新 `docker compose up -d --build` |
 | 页面能开,但**控制台一直连不上** | 证书的 SAN 里没有宿主机 IP(Docker 里只看得到容器自己的 172.x)。WebSocket 没有「继续前往」可点,被浏览器直接拦死。设 `CERT_NAMES: "<宿主机IP>"` + 删旧证书重启,详见 §1.4 |
 | 浏览器报「证书名称不匹配」 | 同上,SAN 里缺这个 IP |
+| 容器一直 `unhealthy`,但服务明明能用 | 老版本的 healthcheck 探针用 `http://` 去打只听 HTTPS 的服务,必然失败。现已改为自适应探针(https 优先、http 兜底),拉最新代码重建镜像即可。`docker inspect <容器> --format '{{range .State.Health.Log}}{{.Output}}{{end}}'` 能看到探针的实际输出 |
+| 容器长时间 `health: starting` | `start_period` 是 60 秒,小内存机器上冷启动慢。`docker compose logs -f` 看日志,等出现「已启动」字样再判断 |
 
 ---
 
-## 8. 本机没有 Docker 时的说明
+## 8. 实测记录,以及本机没有 Docker 时的说明
+
+### 8.1 已完成的实机验证
+
+在一台 Debian 12(Proxmox LXC,4 核 4GB,Docker 28.3.3 / Compose v2.39.1)上
+从零跑通了完整链路:
+
+| 环节 | 结果 |
+|---|---|
+| `git clone`(公开仓库,免凭据) | 成功,94 个文件 |
+| `docker compose build` | 成功,864 秒,镜像 204MB |
+| `docker compose up -d` | 容器正常启动,端口 `0.0.0.0:8080->8080` |
+| `GET /api/health` | 200,`dbWritable: true` |
+| 首页 | 200,1188 字节,`lang="zh-CN"` |
+| 前端静态资源 | 200,JS 274KB / CSS 24KB |
+| 证书 SAN | 含 `IP Address:<宿主机IP>`(修好了) |
+| 控制台 WebSocket 握手 | **101 Switching Protocols**,收到锚点帧 |
+| 大屏 WebSocket 握手 | **101** |
+| 错误令牌握手 | **401**(鉴权确实生效) |
+| 数据持久化 | 卷 `biph-data` 里 db / cert / uploads 都在 |
+| `.dockerignore` | 构建上下文 73 个文件 / 0.62MB,无数据库、私钥、上传文件、`.env` |
+
+### 8.2 仍未在真机验证的
+
+- **iPad 真机**:Wake Lock、PWA 安装、「完全信任」证书的完整点击流程
+- **真实浏览器访问自签证书的 WSS**:命令行握手已验证(101),
+  但浏览器对自签证书不放行时的表现还要在 iPad/Chrome 上人工确认
+- **物理拔网线**(大屏断网后计时器继续走)—— 只做过浏览器层面的模拟断网
+
+### 8.3 本机没有 Docker 时
 
 打包脚本依赖 `docker` 命令;本机没装 Docker 时:
 
 - 可以用 `--dry-run` 预览 compose 与部署说明的生成(不碰 Docker);
 - 真正的 `build` / `save` 需要在装了 Docker 的机器上跑(Windows 上装 Docker Desktop,
   Linux 上装 Docker Engine 即可);
-- **本仓库的镜像构建与容器启动尚未做过实机验证**(开发机无 Docker),
-  第一次在服务器上跑请留一下 `docker compose logs -f` 的输出。
+- 镜像本身的构建与启动已在上面那台 Debian 12 上验证过,可以在服务器上直接 `docker compose build`。
