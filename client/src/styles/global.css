@@ -1,0 +1,1925 @@
+/* ============================================================
+   BIPH 场地管理台 — 全局样式
+   深色主题 · 零外网依赖(仅系统字体栈) · 体育馆/大屏场景
+   ============================================================ */
+
+:root {
+  --bg: #0b0e14;
+  --bg-elev: #121826;
+  --panel: #171d2b;
+  --panel-2: #1e2537;
+  --line: #2a3350;
+  --line-soft: #212a41;
+  --text: #e9edf7;
+  --text-dim: #98a3bd;
+  --text-faint: #6b7690;
+  --accent: #ffb020;
+  --accent-2: #ffd166;
+  --danger: #ff4d5e;
+  --ok: #37d07f;
+  --warn: #f5c451;
+  --info: #56a8ff;
+
+  --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  --radius: 12px;
+  --radius-lg: 18px;
+
+  /* 大屏画布缩放变量(由 Display 页写入) */
+  --scale: 1;
+  --scale-x: 1;
+  --scale-y: 1;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: #0e1420;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  width: 100%;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+input[type="color"] {
+  padding: 2px;
+  height: 44px;
+  cursor: pointer;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------- 通用布局 ---------------- */
+
+.page {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 20px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  padding-left: calc(20px + env(safe-area-inset-left));
+  padding-right: calc(20px + env(safe-area-inset-right));
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+  /* 吸顶:配置页很长,滚到下面时"保存"按钮和保存状态也得看得见 */
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.topbar h1 {
+  font-size: 20px;
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+.page-body {
+  flex: 1;
+  padding: 20px;
+  padding-bottom: calc(28px + env(safe-area-inset-bottom));
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/*
+ * 页脚落款(提供方署名)。
+ *
+ * 放在 .page-body 之外、.page 之内 —— .page-body 是 flex:1,
+ * 所以内容不满屏时页脚依然贴在视口最底部,不会浮在内容中间。
+ */
+.page-footer {
+  flex: none;
+  padding: 14px 20px calc(20px + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-faint);
+  border-top: 1px solid var(--line-soft);
+}
+
+.page-body.wide {
+  max-width: none;
+}
+
+.muted {
+  color: var(--text-dim);
+}
+
+.tiny {
+  font-size: 12px;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------- 按钮 ---------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-weight: 600;
+  transition: background 0.12s ease, border-color 0.12s ease, transform 0.06s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:hover:not(:disabled) {
+  background: #26304a;
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #241a02;
+}
+
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-2);
+}
+
+.btn.danger {
+  background: #3a1620;
+  border-color: #6b2432;
+  color: #ffb3bb;
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: #4d1c28;
+}
+
+.btn.ghost {
+  background: transparent;
+}
+
+.btn.small {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+/* ---------------- 语言切换 ---------------- */
+
+.lang-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-2);
+  flex: 0 0 auto;
+}
+
+.lang-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.lang-toggle button + button {
+  border-left: 1px solid var(--line);
+}
+
+.lang-toggle button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.lang-toggle button.on {
+  background: var(--accent);
+  color: #0b0e14;
+}
+
+.lang-toggle button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* 控制台底部操作行里的语言切换 */
+.action-bar .lang-toggle {
+  align-self: center;
+  margin-left: auto;
+}
+
+.action-bar .lang-toggle button {
+  padding: 8px 14px;
+  font-size: 14px;
+}
+
+/* 大屏角落:平时几乎看不见,鼠标移上去才亮 */
+.display-lang {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 150;
+  opacity: 0;
+  transition: opacity 0.25s;
+  cursor: pointer;
+}
+
+.display-root:hover .display-lang {
+  opacity: 0.32;
+}
+
+.display-lang:hover {
+  opacity: 1;
+}
+
+.lang-toggle.compact button {
+  padding: 3px 8px;
+  font-size: 11px;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+}
+
+/* ---------------- 面板 / 卡片 ---------------- */
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+}
+
+.panel h2 {
+  font-size: 17px;
+  margin-bottom: 4px;
+}
+
+.panel .panel-hint {
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* 字段下面那行小字说明(比如"填了会怎样") */
+.field-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint, #6b7690);
+}
+
+.field > label {
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.field .hint {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.field.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.switch input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+/* ---------------- 徽标 ---------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.badge.live {
+  color: #0f2a1c;
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge.scheduled {
+  color: #2a2410;
+  background: var(--warn);
+  border-color: var(--warn);
+}
+
+.badge.finished {
+  color: var(--text-dim);
+}
+
+.badge.danger {
+  color: #ffd7db;
+  background: #4a1620;
+  border-color: #6b2432;
+}
+
+.badge.ok {
+  color: #0f2a1c;
+  background: var(--ok);
+  border-color: var(--ok);
+}
+
+.badge.bonus {
+  color: #2a1206;
+  background: var(--danger);
+  border-color: var(--danger);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--ok);
+  display: inline-block;
+}
+
+.dot.bad {
+  background: var(--danger);
+}
+
+/* ---------------- 管理台 ---------------- */
+
+.health-strip {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.court-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.court-card {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.12s ease, transform 0.08s ease;
+}
+
+.court-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.court-card .card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* 运动项目 emoji(篮球等),让多场地一眼分清在打什么 */
+.court-card .court-sport {
+  font-size: 19px;
+  line-height: 1;
+  filter: saturate(1.1);
+  user-select: none;
+}
+
+.court-card .court-no {
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 3px 9px;
+}
+
+.court-card .teams {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.court-card .team-name {
+  font-size: 15px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-left: 5px solid var(--team-color, var(--line));
+  padding-left: 8px;
+}
+
+/*
+ * 客队:整块靠右对齐,配色条挪到文字【右边】。
+ *
+ * 网格是 1fr auto 1fr,客队那格本来就是 1fr 宽,但内容默认从格子左边起排,
+ * 于是客队名会紧贴比分而不是贴卡片外沿。这里把文字右对齐、色条翻到右边,
+ * 与主队形成镜像:两边都贴外沿,比分仍然居中。
+ */
+.court-card .team-name.away {
+  border-left: none;
+  border-right: 5px solid var(--team-color, var(--line));
+  padding-left: 0;
+  padding-right: 8px;
+  text-align: right;
+}
+
+.court-card .score {
+  font-size: 34px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  line-height: 1;
+}
+
+.court-card .clock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.court-card .clock {
+  font-size: 30px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.court-card .clock.urgent {
+  color: var(--danger);
+}
+
+.empty-state {
+  text-align: center;
+  padding: 64px 20px;
+  color: var(--text-dim);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+
+.empty-state h2 {
+  color: var(--text);
+  margin-bottom: 8px;
+}
+
+/* ---------------- 弹窗 ---------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 11, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 100;
+  overflow: auto;
+}
+
+.modal {
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  width: min(640px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.modal h2 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+/* ---------------- 控制台 ---------------- */
+
+.control-shell {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: radial-gradient(circle at 50% 0%, #141c2c 0%, var(--bg) 60%);
+}
+
+.offline-bar {
+  background: var(--warn);
+  color: #2b2205;
+  font-weight: 800;
+  text-align: center;
+  padding: 8px 12px;
+  padding-top: calc(8px + env(safe-area-inset-top));
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.offline-bar.connecting {
+  background: #1d2740;
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+/* 竖屏顶部比分条 */
+.score-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.score-bar .sb-team {
+  font-weight: 800;
+  font-size: 17px;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-bar .sb-score {
+  font-size: 26px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.score-bar .sb-period {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  background: var(--panel-2);
+  border-radius: 8px;
+  padding: 3px 8px;
+}
+
+@media (orientation: landscape) and (min-width: 860px) {
+  .score-bar {
+    display: none;
+  }
+}
+
+.control-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  padding-left: calc(12px + env(safe-area-inset-left));
+  padding-right: calc(12px + env(safe-area-inset-right));
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  min-height: 0;
+}
+
+/*
+ * 控制台左上角的墙钟。
+ *
+ * 与管理台右上角那个是同一个口径:服务器当前时间,本机时区渲染。
+ * 放在左上角是因为右上角要留给操作提示(固定定位在那儿),
+ * 左上角在横屏下正好是空白区,不跟任何控件抢位置。
+ */
+.control-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+}
+
+.control-clock {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 2px 9px;
+}
+
+.control-cols {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+
+/* 横屏:左栏计时器(拇指区),右栏两队卡 */
+@media (orientation: landscape) and (min-width: 860px) {
+  .control-cols {
+    flex-direction: row;
+  }
+
+  .control-cols .col-clocks {
+    flex: 0 0 46%;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    justify-content: flex-end;
+  }
+
+  .control-cols .col-teams {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+  }
+}
+
+.clock-panel {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clock-panel .panel-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  color: var(--text-faint);
+  text-transform: uppercase;
+}
+
+.clock-panel .seg-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+}
+
+.clock-panel.running .panel-label {
+  color: var(--accent);
+}
+
+.clock-panel.urgent .seg-wrap {
+  animation: urgent-pulse 1s steps(2, end) infinite;
+}
+
+@keyframes urgent-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.clock-toggle {
+  min-height: 88px;
+  width: 100%;
+  border-radius: 16px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  touch-action: manipulation;
+}
+
+.clock-toggle.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #241a02;
+}
+
+.clock-toggle.off {
+  background: #2c3a24;
+  border-color: #3f5234;
+  color: #c8e6b6;
+}
+
+.step-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.step-btn {
+  min-height: 64px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 17px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.step-btn:active {
+  background: #2e3853;
+}
+
+.step-btn.minus {
+  color: var(--text-dim);
+}
+
+.step-btn.plus {
+  color: var(--text);
+}
+
+.clock-sub-row {
+  display: flex;
+  gap: 8px;
+}
+
+.clock-sub-row > * {
+  flex: 1;
+}
+
+/* 队卡 */
+
+.team-card {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-soft);
+  background: var(--panel);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.team-card .team-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--team-color, var(--panel-2));
+  color: var(--team-text, #fff);
+  min-height: 56px;
+}
+
+.team-card .team-head .name {
+  font-size: 20px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.team-card .team-head .logo {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  object-fit: contain;
+  flex: none;
+}
+
+.team-card .team-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+  min-height: 0;
+}
+
+.team-card .big-score {
+  font-size: clamp(48px, 9vh, 92px);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  min-width: 1.2em;
+  text-align: center;
+}
+
+.team-card .team-controls {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.team-card .score-btn {
+  min-height: 64px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 22px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.team-card .score-btn:active {
+  background: #2e3853;
+}
+
+.team-card .score-btn.minus {
+  color: var(--text-dim);
+  font-size: 18px;
+}
+
+/* 队卡上的「请求暂停」:横跨整行,现场一眼就能摸到 */
+.team-card .timeout-request {
+  grid-column: 1 / -1;
+  min-height: 58px;
+  border-radius: 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.team-card .timeout-request:active {
+  background: #2e3853;
+}
+
+.team-card .timeout-request:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/*
+ * 本队正在暂停中:按钮变成「继续比赛」。
+ *
+ * 实心橙色 —— 这不是状态指示了,是【此刻唯一该按的那个按钮】,
+ * 必须一眼能找到、敢按。按下去 = 结束暂停,大屏回到比赛计时器,表保持停止。
+ */
+.team-card .timeout-request.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: #14171e;
+  font-weight: 800;
+  opacity: 1;
+}
+
+.team-card .timeout-request.active:active {
+  background: var(--accent-2);
+}
+
+.team-card .counters {
+  display: flex;
+  gap: 10px;
+  padding: 0 14px 12px;
+  flex-wrap: wrap;
+}
+
+.counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  padding: 6px 8px;
+}
+
+.counter .counter-label {
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.counter .counter-value {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.4em;
+  text-align: center;
+}
+
+.counter.bonus {
+  border-color: var(--danger);
+  background: #2a1219;
+}
+
+.counter.bonus .counter-value {
+  color: var(--danger);
+}
+
+.counter .mini-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-weight: 800;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+/* 底部固定操作行 */
+
+.action-bar {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg-elev);
+  border-top: 1px solid var(--line-soft);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.action-bar .act {
+  min-height: 72px;
+  min-width: 88px;
+  flex: 1 0 auto;
+  border-radius: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 10px;
+  touch-action: manipulation;
+}
+
+.action-bar .act:active {
+  background: #2e3853;
+}
+
+.action-bar .act.warn {
+  border-color: #6b2432;
+  background: #351420;
+  color: #ffb3bb;
+}
+
+.action-bar .act.accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.action-bar .act .act-sub {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+/* 长按确认按钮 */
+
+.hold-btn {
+  position: relative;
+  overflow: hidden;
+}
+
+.hold-btn .hold-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  background: rgba(255, 77, 94, 0.28);
+  pointer-events: none;
+}
+
+.hold-btn.armed {
+  border-color: var(--danger);
+  color: #ffd7db;
+}
+
+/* ---------------- 大屏 ---------------- */
+
+.display-root {
+  position: fixed;
+  inset: 0;
+  background: #0b0e14;
+  overflow: hidden;
+  cursor: none;
+}
+
+.board-canvas {
+  --board-fg: #ffffff;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 1920px;
+  height: 1080px;
+  transform-origin: center center;
+  transform: translate(-50%, -50%) scale(var(--scale));
+  background: #0b0e14;
+  color: var(--board-fg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.board-canvas.stretch {
+  transform: translate(-50%, -50%) scale(var(--scale-x), var(--scale-y));
+}
+
+.board-top {
+  height: 128px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 48px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.board-title {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--board-fg, #fff);
+}
+
+.board-sponsor {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  max-width: 40%;
+}
+
+.board-sponsor .s-name {
+  font-size: 30px;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
+.board-sponsor .s-text {
+  font-size: 20px;
+  opacity: 0.6;
+}
+
+.board-main {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-height: 0;
+  padding: 0 48px;
+  gap: 24px;
+}
+
+.board-team {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.board-team .t-color {
+  width: 100%;
+  height: 16px;
+  border-radius: 8px;
+  background: var(--team-color, #444);
+}
+
+/*
+ * 大屏队名【不使用】--team-text:
+ * 那个颜色是"队伍色块上的字色"(控制台卡片用),各校自定,
+ * 可能是近黑色(#14171e 之类),放到近黑的大屏底上会整段看不见。
+ * 大屏一律用模板前景色 --board-fg,队色只体现在上方色条上。
+ */
+.board-team .t-name {
+  font-size: 60px;
+  font-weight: 800;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--board-fg, #fff);
+  /* 队徽与队名并排:徽标在左,队名跟着排 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+/* 队徽:高度定死、宽度自适应,最长不超过队名那一行 */
+.board-team .t-logo {
+  height: 76px;
+  width: auto;
+  max-width: 220px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+/* 客队队徽排在队名右边,和主队左右镜像对称 */
+.board-team--away .t-name {
+  flex-direction: row-reverse;
+}
+
+/* 队名本体:单独一层才能让省略号生效 */
+.board-team .t-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-team .t-score {
+  font-size: 260px;
+  font-weight: 800;
+  line-height: 0.92;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  color: var(--board-fg, #fff);
+}
+
+.board-team .t-poss {
+  height: 56px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 28px;
+  font-weight: 800;
+  opacity: 0.95;
+}
+
+.board-center {
+  flex: 0 0 620px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+
+.board-center .period {
+  font-size: 56px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--board-fg, #fff);
+}
+
+.board-center .shot-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+
+.board-center .shot-wrap.low .seg {
+  animation: shot-blink 0.7s steps(2, end) infinite;
+}
+
+@keyframes shot-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+.board-bottom {
+  height: 168px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 64px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 34px;
+  font-weight: 700;
+}
+
+.board-bottom .b-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-dim);
+}
+
+.board-bottom .b-item b {
+  color: #fff;
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+}
+
+.board-bottom .b-item .b-dim {
+  color: var(--text-faint);
+  font-size: 24px;
+}
+
+/*
+ * 大屏上的徽标要按 1080p 画布放大。
+ * 控制台用的 .badge 是 12px 的小药丸,直接搬到大屏上 5 米外根本看不见。
+ */
+.board-bottom .badge {
+  font-size: 30px;
+  font-weight: 800;
+  padding: 6px 22px;
+  gap: 10px;
+  border-width: 2px;
+}
+
+.board-final {
+  position: absolute;
+  top: 148px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.4em;
+  color: var(--danger);
+  border: 3px solid var(--danger);
+  border-radius: 10px;
+  padding: 6px 26px;
+}
+
+.board-offline {
+  position: absolute;
+  top: 22px;
+  right: 26px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 18px rgba(255, 77, 94, 0.9);
+}
+
+/*
+ * 暂停倒计时卡片(盖在画面正中)。
+ *
+ * 边框用请求方的队色(--team-color),观众一眼就知道是谁叫的暂停。
+ * 倒计时用七段管,与比赛钟/进攻钟同一套绘制,零字体依赖。
+ */
+.board-timeout {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 26px;
+  padding: 48px 90px;
+  border-radius: 28px;
+  background: rgba(11, 14, 20, 0.96);
+  border: 6px solid var(--team-color, #ffb020);
+  box-shadow: 0 0 90px rgba(0, 0, 0, 0.8);
+}
+
+.board-timeout .to-label {
+  font-size: 58px;
+  font-weight: 800;
+  color: var(--board-fg, #fff);
+  white-space: nowrap;
+  text-align: center;
+}
+
+/*
+ * 开赛倒计时(开赛前 3 分钟铺满整个画面)。
+ *
+ * 放在 1920×1080 画布**内**,跟着整块画布一起缩放 ——
+ * 4:3 投影仪和 16:9 大屏上,倒计时一样大、位置一样。
+ * 背景用画布底色把下面的比分盖住:这三分钟观众该看的是"快开球了",
+ * 而不是一堆 0:0 的空比分。
+ */
+.board-startup {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: var(--board-bg, #0b0e14);
+}
+
+.board-startup .su-event {
+  font-size: 56px;
+  font-weight: 800;
+  color: var(--board-fg, #fff);
+  letter-spacing: 0.04em;
+  text-align: center;
+  max-width: 78%;
+}
+
+.board-startup .su-label {
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--board-dim, #98a3bd);
+  letter-spacing: 0.34em;
+  /* 字距会让最后一个字右边多出一段空白,缩进补回来,字才真的居中 */
+  text-indent: 0.34em;
+  text-align: center;
+}
+
+.board-startup .su-at {
+  font-size: 38px;
+  font-weight: 600;
+  color: var(--board-dim, #98a3bd);
+  text-align: center;
+}
+
+.board-startup .su-court {
+  font-size: 30px;
+  color: var(--board-dim, #98a3bd);
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+/*
+ * 大屏页脚落款(提供方署名)。
+ *
+ * 绝对定位在画布最底部 —— 不占布局,不会把上面的比分挤歪;
+ * 又因为在 1920×1080 画布内,跟着整块画布一起缩放,任何分辨率下位置一致。
+ * 字号刻意比底部信息行(34px)小一档,颜色压到半透明以下 —— 落款是脚注,
+ * 不能跟比分抢注意力。
+ */
+.board-footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 16px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.3);
+  user-select: none;
+}
+
+.board-standby {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 0 4vw;
+  background: #0b0e14;
+}
+
+/* 待机层在设计画布之外,所以必须用视口相对单位,不能写死 px
+   —— 否则在 4:3 投影仪或窄屏上标题会被裁掉 */
+.board-standby .s-title {
+  font-size: min(96px, 7vw);
+  font-weight: 800;
+  line-height: 1.15;
+  max-width: 92vw;
+  text-align: center;
+  word-break: break-word;
+}
+
+.board-standby .s-sub {
+  font-size: min(48px, 3.4vw);
+  color: var(--text-dim);
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+/* 模板风格差异(同一套 DOM,靠 CSS 变量区分) */
+
+.tpl-simple {
+  --board-bg: #0b0e14;
+  --board-fg: #ffffff;
+  --board-dim: #98a3bd;
+  --board-accent: #ffb020;
+  background: var(--board-bg);
+}
+
+.tpl-led {
+  --board-bg: #07090d;
+  --board-fg: #ffb000;
+  --board-dim: #6b4d00;
+  --board-accent: #ff5f1f;
+  background: var(--board-bg);
+}
+
+.tpl-led .board-title,
+.tpl-led .board-center .period,
+.tpl-led .board-team .t-score,
+.tpl-led .board-team .t-name {
+  color: var(--board-fg);
+  text-shadow: 0 0 18px rgba(255, 176, 0, 0.45);
+}
+
+.tpl-led .board-team .t-score {
+  text-shadow: 0 0 26px rgba(255, 176, 0, 0.6);
+}
+
+.tpl-broadcast {
+  --board-bg: #0a0f1c;
+  --board-fg: #f2f6ff;
+  --board-dim: #8fa0c4;
+  --board-accent: #4ea1ff;
+  background: linear-gradient(160deg, #0a0f1c 0%, #121a2d 55%, #0a0f1c 100%);
+}
+
+.tpl-broadcast .board-top {
+  border-bottom: 2px solid var(--board-accent);
+}
+
+.tpl-broadcast .board-team .t-color {
+  height: 10px;
+  border-radius: 0;
+}
+
+.tpl-broadcast .board-team .t-score {
+  font-size: 280px;
+}
+
+/* 音效解锁遮罩 */
+
+.audio-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 6, 11, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  cursor: pointer;
+  text-align: center;
+}
+
+.audio-overlay .inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+.audio-overlay .big {
+  font-size: 46px;
+  font-weight: 800;
+}
+
+.audio-overlay .small {
+  font-size: 24px;
+  color: var(--text-dim);
+}
+
+/* ---------------- 二维码 / 令牌 ---------------- */
+
+.token-box {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.qr {
+  background: #fff;
+  padding: 10px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.qr img {
+  display: block;
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.token-links {
+  flex: 1;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.token-link {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-elev);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 8px 10px;
+}
+
+.token-link code {
+  flex: 1;
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* ---------------- 暂停倒计时警示(控制台顶部) ---------------- */
+/*
+ * 暂停最后 5 秒 → 红色警示 + 读秒;倒计时归零 → 绿色收尾。
+ *
+ * 放在控制台顶部整条横幅(和断线黄条同一个位置):
+ *   - 横向占满,余光扫得到
+ *   - 不挡队卡的记分按钮,也不挡底部操作行(拇指区)
+ */
+.timeout-alert {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px 16px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  color: #fff;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.timeout-alert.urgent {
+  background: var(--danger);
+  animation: timeout-alert-pulse 1s ease-in-out infinite;
+}
+
+.timeout-alert.ended {
+  background: var(--ok);
+  color: #06230f;
+}
+
+.timeout-alert-mark {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.timeout-alert-text {
+  min-width: 0;
+}
+
+@keyframes timeout-alert-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+
+  50% {
+    filter: brightness(1.32);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeout-alert.urgent {
+    animation: none;
+  }
+}
+
+/* ---------------- 操作提示(右上角) ---------------- */
+/*
+ * 按完按钮的即时反馈:绿勾 = 命令确实生效了,红色 = 被服务端拒绝了。
+ *
+ * 放右上角有两个考虑:
+ *   1. 不挡任何操作按钮(队卡在中间、底部是固定操作行,右上角是空的)
+ *   2. 计分员视线在队卡与计时器之间,抬头扫一眼就能看到
+ *
+ * 容器本身不吃点击(pointer-events:none),只有提示条本身可以点掉 ——
+ * 免得提示飘在按钮上面时挡住按不到。
+ */
+.toast-stack {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  z-index: 320;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  pointer-events: none;
+  max-width: min(92vw, 440px);
+}
+
+.toast-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: 100%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--ok);
+  background: rgba(12, 46, 32, 0.94);
+  color: #d9ffe9;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: toast-in 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+  cursor: pointer;
+  user-select: none;
+}
+
+.toast-item.err {
+  border-color: var(--danger);
+  background: rgba(48, 16, 24, 0.94);
+  color: #ffdde1;
+}
+
+.toast-mark {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ok);
+  color: #0b0e14;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.toast-item.err .toast-mark {
+  background: var(--danger);
+  color: #fff;
+}
+
+.toast-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item {
+    animation: none;
+  }
+}
+
+.notice {
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* ---------------- 保存状态(常驻顶栏) ---------------- */
+
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  max-width: 320px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.save-state.dirty {
+  color: #f0d69a;
+  background: #241d09;
+  border-color: #6b5a20;
+  font-weight: 600;
+}
+
+.save-state.ok {
+  color: #8fe3a8;
+  background: #0f2417;
+  border-color: #235c3a;
+}
+
+.save-state.err {
+  color: #ffb3bb;
+  background: #2a1219;
+  border-color: #6b2432;
+  font-weight: 600;
+}
+
+.save-state.busy {
+  color: var(--text-dim);
+  background: var(--bg);
+  border-color: var(--line);
+}
+
+/* ---------------- 管理员密钥弹窗 ---------------- */
+
+/* 弹窗里的密钥输入框:等宽数字,输错时一眼能看出少了几位 */
+#admin-key-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  letter-spacing: 0.12em;
+}
+
+.notice.warn {
+  border-color: #6b5a20;
+  background: #241d09;
+  color: #f0d69a;
+}
+
+.notice.danger {
+  border-color: #6b2432;
+  background: #2a1219;
+  color: #ffb3bb;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ---------------- 响应式 ---------------- */
+
+@media (max-width: 720px) {
+  .page-body {
+    padding: 14px;
+  }
+
+  .team-card .team-controls {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .team-card .big-score {
+    font-size: 44px;
+  }
+}

@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.tsbuildinfo
+
+# 运行期数据(SQLite / 上传 / 自签证书)
+data/
+server/.smoke/
+server/.smoke*/
+server/.dist-smoke/
+server/.smoke*.log
+*.db
+*.db-wal
+*.db-shm
+
+# 一次性验证脚本(浏览器实测/冒烟),用完即删
+.verify/
+
+# 界面截图不随仓库公开:里面有真实赛事名、真实队名和渲染出来的队徽。
+# 本地留着看,推到仓库的版本不含这些图(README 里对应位置改成了文字说明)。
+docs/screenshots/
+
+# 环境
+.env
+.env.local
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

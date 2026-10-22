@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+    />
+    <meta name="theme-color" content="#0b0e14" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BIPH" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- BIPH 标志:favicon 保持透明底(浏览器标签栏更轻),主屏图标合成到应用深色底 -->
+    <link rel="icon" href="/favicon.png" type="image/png" sizes="any" />
+    <link rel="apple-touch-icon" href="/icon-180.png" />
+    <!-- 标签页标题:与 Dashboard 标题一致,运行时由 i18n 按语言改写 -->
+    <title>BIPH 场地管理台</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

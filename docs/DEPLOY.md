@@ -1,0 +1,278 @@
+# BIPH 场地管理台 —— 打包与部署手册
+
+> 面向:要在**另一台服务器**上跑起来。
+> 主推路径:**GitHub 私有仓库放源码,服务器 clone 下来现场构建**;目标服务器没有外网时改走离线部署包。
+
+---
+
+## 0. 先选一条路
+
+| 你的情况 | 走哪条 | 代价 |
+|---|---|---|
+| 目标服务器**能上外网** | **路径 A:GitHub 私有仓库** | 服务器上 `git clone` + `docker compose up -d --build`,几分钟 |
+| 目标服务器**没有外网**(校园网内网常见) | **路径 B:离线部署包** | 在你自己的机器上先 build 好,拷一个 tar 过去 |
+| 目标服务器**没装 Docker** | 先装 Docker,再走 A 或 B | 见 §5 |
+
+> 「没有外网」不只是拉不动 npm:基础镜像 `node:24-alpine` 也得从 Docker Hub 拉。
+> 所以离线服务器的正解是**在有网的机器上把镜像导出成 tar**,别指望在服务器上现场构建。
+
+### 为什么是 Git 仓库而不是镜像仓库
+
+| | Docker Hub | GitHub 私有仓库 |
+|---|---|---|
+| 国内拉取速度 | 官方仓库是国内最慢的,常超时,得配加速器 | clone 用 `--depth 1` 就够快,也能换 Gitee |
+| 服务器上要多存什么 | 私有镜像必须 `docker login`,会留下 PAT 凭据 | 一个**只读 deploy key**,或者干脆用只读 token |
+| 限流 | 匿名拉 10 次/小时/IP(登录后 100/小时),学校 NAT 共享出口 IP 容易撞线 | 无 |
+| 升级 | 改完代码要重新 build + push + pull 镜像 | `git pull` + 重建,同一个流程 |
+| 回滚 | 换镜像 tag | `git checkout <tag>` 再重建 |
+
+> 如果你确实不想让服务器现场构建,又想要一个远程镜像仓库,用 **GHCR**(GitHub Container Registry)
+> 比 Docker Hub 省心:和 GitHub 账号一体、私有包免费、公开镜像匿名拉不限流。
+
+---
+
+## 1. 路径 A:GitHub 私有仓库(主推)
+
+### 1.1 在开发机上建仓并推送
+
+```bash
+cd BIPH-Scoreboard
+git init                      # 已经 init 过就跳过
+git add -A
+git commit -m "BIPH 场地管理台 v0.1.0"
+git tag v0.1.0                 # 给每个可部署版本打个 tag,回滚要用
+git remote add origin git@github.com:<你的账号>/BIPH-Scoreboard.git
+git push -u origin main
+git push origin v0.1.0
+```
+
+仓库建好后记得在 GitHub 上设为 **Private**。
+
+> 仓库里**不含**任何真实数据:`server/.smoke/`(SQLite 比赛库、私钥、上传的队徽)与
+> `docs/screenshots/`(含真实赛事名与队名的界面截图)都已在 `.gitignore` 里。
+> 推送前可以自己核一遍:`git ls-files | grep -E "smoke|screenshots|\\.db"`(应该没有输出)。
+
+### 1.2 给服务器一把只读的钥匙(deploy key)
+
+服务器 clone 私有仓库需要凭据。**推荐 deploy key** —— 一把只读的 SSH 密钥,只对这一个仓库有效:
+
+```bash
+# 在服务器上
+ssh-keygen -t ed25519 -C "biph-server" -f ~/.ssh/biph_deploy -N ""
+cat ~/.ssh/biph_deploy.pub
+```
+
+把输出的公钥粘到 GitHub 仓库的 **Settings → Deploy keys → Add deploy key**,
+**不要勾** "Allow write access"(只读就够,服务器不需要改代码)。
+
+```bash
+# 在服务器上,告诉 git 这个仓库用哪把钥匙
+mkdir -p ~/.ssh
+cat >> ~/.ssh/config <<'EOF'
+Host github-biph
+    HostName github.com
+    User git
+    IdentityFile ~/.ssh/biph_deploy
+    IdentitiesOnly yes
+EOF
+chmod 600 ~/.ssh/config ~/.ssh/biph_deploy
+```
+
+### 1.3 在服务器上 clone 并启动
+
+```bash
+sudo git clone git@github-biph:<你的账号>/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
+cd /opt/BIPH-Scoreboard
+docker compose up -d --build
+docker compose logs -f scoreboard
+```
+
+### 1.4 以后更新
+
+```bash
+cd /opt/BIPH-Scoreboard
+./scripts/deploy.sh              # 拉代码 → 重建镜像 → 重启 → 打印状态和日志
+```
+
+回滚到某个版本:
+
+```bash
+./scripts/deploy.sh --rollback v0.1.0
+```
+
+> 数据在 Docker 卷 `biph-data` 里,**重建镜像不会丢比赛数据**。
+
+---
+
+## 2. 路径 B(给没有外网的校园网服务器):离线部署包
+
+### 2.1 在你有网的机器上打包
+
+```bash
+cd BIPH-Scoreboard
+npm run package:docker              # 等价于 node scripts/package-image.mjs
+```
+
+产出在 `dist/`:
+
+```
+dist/
+├── biph-0.1.0-linux-amd64.tar        镜像本体(docker load 直接吃)
+├── biph-0.1.0-linux-amd64.tar.sha256 校验和
+├── docker-compose.yml                镜像部署版(已去掉 build 段)
+├── 部署说明.md                        拷过去照着做
+└── README.md
+```
+
+常用参数:
+
+| 参数 | 作用 |
+|---|---|
+| `--platform linux/arm64` | 目标服务器是 ARM(飞腾 / 鲲鹏 / 树莓派)时用 |
+| `--with-source` | 额外打一份干净源码包,供路径 A 使用 |
+| `--no-build` | 不重新构建,只导出现有镜像 |
+| `--load` | 打包后在本机 `docker load` 回来,顺手自测 |
+| `--dry-run` | 不碰 Docker,只生成 compose 与部署说明(预览用) |
+| `--out <目录>` | 换个输出目录 |
+
+### 2.2 拷到服务器
+
+```bash
+scp -r dist user@server:/opt/biph/
+```
+
+### 2.3 在服务器上启动
+
+```bash
+cd /opt/biph
+docker load -i biph-0.1.0-linux-amd64.tar
+docker compose up -d
+docker compose logs -f scoreboard
+```
+
+详细的验证、备份、迁移、故障排查见 **`dist/部署说明.md`**(打包时自动生成,跟着 tar 一起走)。
+
+---
+
+## 3. 不用任何托管服务:直接拷源码
+
+不想建仓、也不想开公网仓库的话,直接拷目录:
+
+```bash
+scp -r BIPH-Scoreboard user@server:/opt/
+cd /opt/BIPH-Scoreboard
+docker compose up -d --build
+```
+
+也可以用打包脚本顺手产出的源码包:
+
+```bash
+npm run package:docker -- --with-source
+# 得到 dist/biph-0.1.0-source.tar.gz
+scp dist/biph-0.1.0-source.tar.gz user@server:/opt/
+# 服务器上:
+tar xzf biph-0.1.0-source.tar.gz -C /opt/BIPH-Scoreboard
+cd /opt/BIPH-Scoreboard && docker compose up -d --build
+```
+
+代价:没有版本管理,更新要重新拷一遍。
+
+---
+
+## 4. 镜像本身是怎么做出来的
+
+`Dockerfile` 是三段式:
+
+| 阶段 | 做什么 |
+|---|---|
+| `client-build` | 装依赖 → 构建前端产物 |
+| `server-build` | 装依赖 → 构建后端产物 → `npm prune --omit=dev` 砍掉 devDependencies |
+| `runtime` | 只拷编译产物,不带源码、不带工具链 |
+
+运行时镜像里没有编译工具链 —— SQLite 用的是 Node 内置的 `node:sqlite`,
+自签证书用 `node-forge` 在 JS 里生成(不调 openssl),所以 `node:24-alpine` 就够了。
+
+### `.dockerignore` 里必须排掉的东西
+
+运行期数据**绝对不能进构建上下文**。`.gitignore` 排了,`.dockerignore` 也得排 ——
+两边漏一处,真实比赛数据(还有自签证书的**私钥**)就会被打进镜像里。
+
+已排掉:`node_modules` / `dist` / `data` / `server/.smoke` / `*.db` / `.env` / `docs` / 测试文件。
+
+---
+
+## 5. 换服务器 / 备份 / 恢复
+
+所有运行期数据都在 Docker 卷 `biph-data` 里:
+
+```
+scoreboard.db   SQLite(比赛、比分、规则、设置)
+uploads/        上传的队徽
+cert/           自签证书与私钥
+```
+
+**备份**:
+
+```bash
+docker run --rm -v biph-data:/data -v $(pwd):/backup alpine \
+  tar czf /backup/biph-backup-$(date +%F).tar.gz -C /data .
+```
+
+**换服务器迁移**:老机器备份 → 新机器 `docker load` + `docker compose up -d` → 解包覆盖进卷:
+
+```bash
+docker run --rm -v biph-data:/data -v $(pwd):/backup alpine \
+  tar xzf /backup/biph-backup-2026-10-22.tar.gz -C /data
+```
+
+---
+
+## 6. 服务器准备清单
+
+| 项 | 要求 |
+|---|---|
+| Docker Engine | 20.10+ / 24+ 均可(`docker compose` v2 需要) |
+| 架构 | 与镜像平台一致:x86_64 → `linux/amd64`,ARM → `linux/arm64` |
+| 端口 | 默认 `8080`,`docker-compose.yml` 里可改 |
+| 磁盘 | 镜像约 200~400MB,数据卷随比赛数增长(很小) |
+| 权限 | 用户要在 `docker` 组,否则每次要 `sudo` |
+
+Ubuntu/Debian 装 Docker:
+
+```bash
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER    # 重新登录生效
+```
+
+---
+
+## 7. 常见问题
+
+| 现象 | 原因与对策 |
+|---|---|
+| `exec format error` | 架构不对。`uname -m` 看目标机:`x86_64` → `--platform linux/amd64`,`aarch64` → `linux/arm64`,重新打包 |
+| `docker compose` 报找不到命令 | Compose v2 没装,或 docker-compose v1(`docker-compose` 带连字符)与 v2(`docker compose` 空格)搞混了 |
+| 构建时 `npm ci` 卡住/超时 | 构建机没外网 —— 换到有网的机器打包(路径 B) |
+| 页面全 404 | 前端产物没进镜像。确认是 `docker compose up -d` 起的,不是手工 `docker run` |
+| iPad 比赛中途锁屏 | Wake Lock 需要安全上下文,必须走 `https://`;用 IP 访问要在 iPad 上信任一次自签证书 |
+| 手机访问不到服务器 | 校园网 AP 隔离。改 `network_mode: host`(Linux)或接独立热点 |
+| 端口被占 | 改 `docker-compose.yml` 的 `ports`,如 `"8081:8080"` |
+| 想改管理员密钥 | `docker-compose.yml` 加 `ADMIN_KEY: "你的密钥"`,再 `docker compose up -d` |
+| 启动日志里端口/IP 不对 | `docker-compose.yml` 里 `HOST` 应为 `0.0.0.0` |
+| `git clone` 报 `Permission denied (publickey)` | 服务器的 deploy key 没配好。查 `~/.ssh/config` 里的 `Host github-biph` 段,或确认公钥已加进仓库的 Deploy keys |
+| `git pull` 报 `Your local changes would be overwritten` | 服务器上有人改过文件。`git stash` 或 `git checkout -- .` 放弃服务器上的改动再 pull |
+| `git pull` 报 `refusing to merge unrelated histories` | 远程换过仓库或重建过。`git pull --allow-unrelated-histories origin main` |
+| 拉 GitHub 太慢/超时 | 用 `git clone --depth 1`;或把仓库搬到 Gitee / GitCode / 学校自建 GitLab(Git 格式完全一样,改个 remote 就行) |
+| `docker compose build` 时拉基础镜像超时 | Docker Hub 在国内慢。给 Docker 配一个 registry mirror,或改走路径 B(离线包) |
+
+---
+
+## 8. 本机没有 Docker 时的说明
+
+打包脚本依赖 `docker` 命令;本机没装 Docker 时:
+
+- 可以用 `--dry-run` 预览 compose 与部署说明的生成(不碰 Docker);
+- 真正的 `build` / `save` 需要在装了 Docker 的机器上跑(Windows 上装 Docker Desktop,
+  Linux 上装 Docker Engine 即可);
+- **本仓库的镜像构建与容器启动尚未做过实机验证**(开发机无 Docker),
+  第一次在服务器上跑请留一下 `docker compose logs -f` 的输出。

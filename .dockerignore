@@ -1,0 +1,38 @@
+node_modules
+**/node_modules
+**/dist
+dist*
+data
+**/data
+.git
+.gitignore
+*.log
+docs
+.vscode
+.idea
+**/*.test.ts
+**/*.test.tsx
+
+# --- 运行期数据:绝不能进构建上下文 ---
+# 里面是真实比赛数据(SQLite)、自签证书私钥(server.key)、上传的队徽。
+# .gitignore 排了这些,.dockerignore 也要排 —— 两边漏一处就会把数据打进镜像。
+server/.smoke
+server/.smoke*
+**/.smoke
+**/.smoke*
+*.db
+*.db-wal
+*.db-shm
+**/*.db
+**/*.db-wal
+**/*.db-shm
+
+# 环境与密钥
+.env
+.env.*
+**/.env
+**/.env.*
+
+# 一次性验证脚本
+.verify
+**/.verify

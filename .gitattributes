@@ -1,0 +1,18 @@
+# 行尾统一:仓库里存 LF,各平台检出也用 LF。
+# 这个项目会在 Linux 服务器上被 clone 并在容器里构建,
+# 行尾不一致会让 diff 出现"整文件都变了"的噪声,也会让某些脚本行为不同。
+* text=auto eol=lf
+
+# 二进制文件不做任何转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.pdf binary
+*.tar binary
+*.tar.gz binary
+*.zip binary

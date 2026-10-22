@@ -1,0 +1,27 @@
+{
+  "name": "biph",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "本地自托管篮球记分牌 —— Docker 一条命令部署,局域网内运行,计时器不依赖网络",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "build:shared": "npm run build -w @biph/shared",
+    "build:server": "npm run build -w @biph/server",
+    "build:client": "npm run build -w @biph/client",
+    "package:docker": "node scripts/package-image.mjs",
+    "build": "npm run build:shared && npm run build:server && npm run build:client",
+    "dev:shared": "npm run watch -w @biph/shared",
+    "dev:server": "npm run dev -w @biph/server",
+    "dev:client": "npm run dev -w @biph/client",
+    "test": "npm run test -w @biph/server && npm run test -w @biph/client",
+    "typecheck": "npm run typecheck -w @biph/shared && npm run typecheck -w @biph/server && npm run typecheck -w @biph/client"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BIPH 场地管理台 · 本地自托管记分牌 需求分析</title>
+<!--
+  零外网依赖:不引 Google Fonts。
+  下面的字体栈本身就带本地回退(PingFang SC / Microsoft YaHei / Georgia / ui-monospace),
+  校园网打不开 fonts.googleapis.com 也能正常排版 —— 拿到的只是字形差一点,不是白屏。
+-->
+<style>
+  :root{
+    --bg:#f7f5f0; --card:#fff; --line:#e9e3d6; --line-soft:#f1ece2;
+    --ink:#14171e; --ink2:#3a4256; --muted:#7c7a72;
+    --accent:#c97b3f; --accent-soft:rgba(201,123,63,.10);
+    --green:#2f6f5e; --green-soft:rgba(47,111,94,.10);
+    --red:#b06367; --red-soft:rgba(176,99,103,.10);
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:'Outfit','PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;
+    font-size:15px; line-height:1.62; font-weight:400;
+    background-image:
+      radial-gradient(900px 420px at 100% -8%, rgba(201,123,63,.07), transparent 62%),
+      radial-gradient(700px 380px at -10% 4%, rgba(47,111,94,.06), transparent 60%);
+  }
+  .wrap{max-width:1024px; margin:0 auto; padding:40px 24px 96px}
+  @media(min-width:768px){ .wrap{padding:64px 32px 120px} }
+
+  .eyebrow{font-size:12px; letter-spacing:.16em; text-transform:uppercase; color:var(--accent); font-weight:600}
+  h1{
+    font-family:'DM Serif Display',Georgia,serif; font-weight:400;
+    font-size:34px; line-height:1.22; letter-spacing:-.005em; margin:14px 0 0;
+  }
+  h1 em{font-style:normal; color:var(--accent)}
+  .lead{font-size:16px; color:var(--ink2); max-width:720px; margin:16px 0 0}
+  .lede-note{font-size:13.5px; color:var(--muted); max-width:720px; margin:10px 0 0}
+
+  .stats{display:grid; grid-template-columns:repeat(2,1fr); gap:1px; background:var(--line);
+    border:1px solid var(--line); border-radius:16px; overflow:hidden; margin:36px 0 0}
+  @media(min-width:760px){ .stats{grid-template-columns:repeat(4,1fr)} }
+  .stat{background:var(--card); padding:16px 18px}
+  .stat b{display:block; font-family:'DM Serif Display',serif; font-size:25px; font-weight:400; line-height:1.2; color:var(--ink)}
+  .stat span{display:block; font-size:12.5px; color:var(--muted); margin-top:3px; line-height:1.45}
+
+  section{margin-top:52px}
+  @media(min-width:768px){ section{margin-top:60px} }
+  h2{
+    font-family:'DM Serif Display',Georgia,serif; font-weight:400; font-size:25px;
+    margin:0 0 6px; letter-spacing:-.003em; display:flex; align-items:center; gap:10px;
+  }
+  h2 svg{flex:none; color:var(--accent)}
+  .sub{color:var(--muted); font-size:14px; margin:0 0 22px; max-width:760px}
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:20px 22px;
+    box-shadow:0 2px 8px rgba(0,0,0,.035)}
+  .card + .card{margin-top:14px}
+  .card h3{margin:0 0 10px; font-size:15.5px; font-weight:600; letter-spacing:-.01em}
+  .card p{margin:0 0 10px; color:var(--ink2); font-size:14.5px}
+  .card p:last-child{margin-bottom:0}
+
+  .grid2{display:grid; gap:14px; grid-template-columns:1fr}
+  @media(min-width:820px){ .grid2{grid-template-columns:1fr 1fr} }
+
+  pre{font-family:var(--mono); font-size:12.5px; line-height:1.75; background:#1b1e27; color:#d7dbe4;
+    padding:14px 16px; border-radius:12px; overflow-x:auto; margin:0}
+  pre .k{color:#7fb4a6} pre .s{color:#e0a96d} pre .c{color:#7e8496} pre .n{color:#9fb8e0}
+
+  /* chain */
+  .chain{display:flex; flex-wrap:wrap; align-items:stretch; gap:6px}
+  .chain-node{background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 12px;
+    font-size:13px; color:var(--ink2); line-height:1.35; flex:1 1 128px}
+  .chain-node b{display:block; color:var(--ink); font-weight:600; font-size:13px}
+  .chain-arrow{display:flex; align-items:center; color:var(--muted); flex:none}
+  .chain-arrow svg{opacity:.55}
+  .outcomes{display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px}
+  @media(max-width:680px){ .outcomes{grid-template-columns:1fr} }
+  .outcome{border-radius:12px; padding:12px 14px; font-size:13px; line-height:1.5}
+  .outcome b{display:block; margin-bottom:3px; font-size:13.5px}
+  .outcome.red{background:var(--red-soft); border:1px solid rgba(176,99,103,.22); color:#7e4549}
+  .outcome.amber{background:var(--accent-soft); border:1px solid rgba(201,123,63,.25); color:#8a5527}
+  .outcome.green{background:var(--green-soft); border:1px solid rgba(47,111,94,.22); color:#22564a}
+
+  /* chart */
+  .chart-wrap{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 18px 14px;
+    box-shadow:0 2px 8px rgba(0,0,0,.035)}
+  .chart-wrap svg{width:100%; height:auto; display:block}
+  .legend{display:flex; flex-wrap:wrap; gap:18px; margin-top:12px; padding-top:12px; border-top:1px solid var(--line-soft)}
+  .legend div{display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink2)}
+  .swatch{width:16px; height:3px; border-radius:2px; flex:none}
+  .swatch.dash{height:0; border-top:2px dashed var(--muted)}
+
+  .formula{font-family:var(--mono); font-size:13px; background:var(--accent-soft); border:1px solid rgba(201,123,63,.22);
+    color:#6d4322; padding:13px 15px; border-radius:12px; margin:0; overflow-x:auto; line-height:1.8}
+
+  /* steps */
+  .steps{display:grid; gap:12px; grid-template-columns:1fr}
+  @media(min-width:860px){ .steps{grid-template-columns:repeat(3,1fr)} }
+  .step{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; position:relative}
+  .step .tag{display:inline-block; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+    padding:3px 8px; border-radius:6px; font-weight:600; margin-bottom:8px}
+  .step h4{margin:0 0 6px; font-size:14.5px; font-weight:600}
+  .step p{margin:0; font-size:13.5px; color:var(--ink2)}
+  .step.ok .tag{background:var(--green-soft); color:var(--green)}
+  .step.warn .tag{background:var(--accent-soft); color:#8a5527}
+
+  /* table */
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  thead th{text-align:left; font-weight:600; font-size:12px; letter-spacing:.05em; text-transform:uppercase;
+    color:var(--muted); padding:0 12px 9px; border-bottom:1px solid var(--line)}
+  tbody td{padding:10px 12px; border-bottom:1px solid var(--line-soft); color:var(--ink2); vertical-align:top; line-height:1.5}
+  tbody tr:last-child td{border-bottom:none}
+  tbody td:first-child{color:var(--ink); font-weight:500; white-space:nowrap}
+  .pill{display:inline-block; font-size:11px; font-weight:600; padding:2px 7px; border-radius:5px; font-family:var(--mono)}
+  .pill.p0{background:var(--red-soft); color:#8a4a4e}
+  .pill.p1{background:var(--accent-soft); color:#8a5527}
+  .pill.p2{background:var(--green-soft); color:var(--green)}
+  .tbl-card{background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px 8px 10px;
+    box-shadow:0 2px 8px rgba(0,0,0,.035); overflow-x:auto}
+
+  /* layers */
+  .layer{display:grid; gap:10px; grid-template-columns:1fr}
+  @media(min-width:820px){ .layer{grid-template-columns:150px 1fr} }
+  .layer-key{display:flex; flex-direction:column; justify-content:center}
+  .layer-key b{font-size:14px}
+  .layer-key span{font-size:12px; color:var(--muted)}
+  .chips{display:flex; flex-wrap:wrap; gap:7px}
+  .chip{border:1px solid var(--line); border-radius:8px; padding:6px 11px; font-size:12.5px; color:var(--ink2); background:var(--card)}
+  .chip.hi{border-color:rgba(201,123,63,.4); background:var(--accent-soft); color:#7a4a22}
+  .engine{background:#1b1e27; color:#d7dbe4; border-radius:14px; padding:16px 20px; margin-top:12px}
+  .engine b{color:#fff; font-weight:600; font-size:14px}
+  .engine p{margin:6px 0 0; font-size:13px; color:#a8aebd; line-height:1.6}
+
+  /* timeline */
+  .timeline{list-style:none; padding:0; margin:0; position:relative}
+  .timeline::before{content:""; position:absolute; left:8px; top:8px; bottom:8px; width:2px; background:var(--accent); opacity:.32}
+  .timeline li{position:relative; padding:0 0 24px 32px}
+  .timeline li::before{content:""; position:absolute; left:2px; top:5px; width:14px; height:14px; border-radius:50%;
+    background:var(--bg); border:2px solid var(--accent)}
+  .timeline li:last-child{padding-bottom:0}
+  .timeline h4{margin:0 0 4px; font-size:14.5px; font-weight:600; display:flex; align-items:center; gap:8px}
+  .timeline p{margin:0; font-size:13.5px; color:var(--ink2)}
+
+  /* risks */
+  .risks{display:grid; gap:12px; grid-template-columns:1fr}
+  @media(min-width:860px){ .risks{grid-template-columns:1fr 1fr} }
+  .risk{background:var(--card); border:1px solid var(--line); border-radius:14px; padding:15px 17px}
+  .risk h4{margin:0 0 6px; font-size:14px; font-weight:600; display:flex; gap:8px; align-items:flex-start}
+  .risk h4 svg{flex:none; margin-top:2px; color:var(--accent)}
+  .risk p{margin:0; font-size:13.5px; color:var(--ink2)}
+  .risk code{font-family:var(--mono); font-size:12px; background:var(--line-soft); padding:1px 5px; border-radius:4px; color:var(--ink)}
+
+  .qs{counter-reset:q; list-style:none; padding:0; margin:0}
+  .qs li{counter-increment:q; padding:13px 0 13px 38px; border-bottom:1px solid var(--line-soft); position:relative; font-size:14px; color:var(--ink2)}
+  .qs li::before{content:counter(q); position:absolute; left:0; top:13px; width:24px; height:24px; border-radius:7px;
+    background:var(--accent-soft); color:#8a5527; font-family:var(--mono); font-size:12px; display:flex; align-items:center; justify-content:center}
+  .qs li b{color:var(--ink); font-weight:600}
+  .qs li:last-child{border-bottom:none}
+
+  .foot{margin-top:64px; padding-top:22px; border-top:1px solid var(--line); color:var(--muted); font-size:12.5px;
+    display:flex; flex-wrap:wrap; gap:8px 20px; justify-content:space-between}
+  .foot code{font-family:var(--mono)}
+  .note{font-size:12.5px; color:var(--muted); margin-top:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">BIPH 场地管理台 · 需求分析 v0.1</div>
+    <h1>把 <em>时钟</em> 从「同步的值」<br/>改成「同步的锚点」</h1>
+    <p class="lead">
+      目标:替代 scoreboard.best,做一套可 Docker 自托管、局域网内运行的记分牌。v1 只做篮球,架构上为其他球类留好扩展位。
+    </p>
+    <p class="lede-note">
+      已完成对竞品的实测拆解 —— 它的计时器抖动根因已定位到具体代码,而非泛泛的「网络慢」。
+    </p>
+
+    <div class="stats">
+      <div class="stat"><b>1 容器</b><span>零外部依赖,无数据库/Redis/对象存储</span></div>
+      <div class="stat"><b>60 秒</b><span>拔网线后大屏计时仍连续不跳变</span></div>
+      <div class="stat"><b>≤ 1.0s</b><span>网络恢复后自动对齐,比分不丢不重</span></div>
+      <div class="stat"><b>128 bit</b><span>操作令牌长度,免注册、扫码即用</span></div>
+    </div>
+  </header>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>它的计时器为什么会抖</h2>
+    <p class="sub">竞品把剩余时间当作<strong>格式化字符串</strong>随状态一起同步,大屏原样渲染、不做任何本地推算。时钟因此完全寄生在网络送达率上。</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>证据 A · 状态模型:时间是字符串</h3>
+        <pre><span class="c">// GET /api/matches/:id</span>
+<span class="k">"clock"</span>: {
+  <span class="k">"periodLabel"</span>: <span class="s">"Q"</span>,
+  <span class="k">"period"</span>: <span class="n">3</span>,
+  <span class="k">"timeRemaining"</span>: <span class="s">"07:22"</span>,   <span class="c">// ← 字符串</span>
+  <span class="k">"running"</span>: <span class="n">false</span>
+}</pre>
+        <p style="margin-top:12px">整份状态里<strong>没有</strong>任何「计时从何时开始」的基准时间戳。客户端拿着它,没有任何办法推算「现在还剩多少秒」——只能等下一个字符串。</p>
+      </div>
+
+      <div class="card">
+        <h3>证据 B · 大屏渲染:原样输出</h3>
+        <pre><span class="c">// FIBA 模板</span>
+children: F.clock.timeRemaining
+
+<span class="c">// 通用模板</span>
+children: h ? r.clock.running
+  ? r.clock.timeRemaining
+  : <span class="s">"01:00"</span> : r.clock.running
+  ? r.clock.timeRemaining : <span class="c">…</span></pre>
+        <p style="margin-top:12px">大屏显示的每一个数字,都是服务端<strong>最后一次成功送达</strong>的字符串。延迟即滞后,丢失即冻结。</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>证据 C · 推送与降级:Postgres 变更事件不可回放</h3>
+      <pre><span class="k">let</span> n = t.channel(<span class="s">"match-"</span>+v.id)
+  .on(<span class="s">"postgres_changes"</span>, { event:<span class="s">"UPDATE"</span>, table:<span class="s">"matches"</span> }, …)
+  .subscribe(e =&gt; {
+    (<span class="s">"CHANNEL_ERROR"</span>===e || <span class="s">"TIMED_OUT"</span>===e)
+      &amp;&amp; (l=<span class="n">false</span>, F(<span class="s">"Realtime fallback"</span>)),
+    (<span class="s">"SUBSCRIBED"</span>===e) &amp;&amp; (l=<span class="n">true</span>, F(<span class="s">"Realtime"</span>))
+  });
+e = window.setInterval(() =&gt; { l || o() }, <span class="n">3000</span>); <span class="c">// 仅掉线时才轮询</span></pre>
+      <p style="margin-top:12px">断线期间错过的更新<strong>永久丢失</strong>,只能靠 3 秒轮询兜底 —— 而轮询只能恢复<strong>状态</strong>,恢复不了<strong>过程</strong>。</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>根因链</h3>
+      <div class="chain" style="margin-top:12px">
+        <div class="chain-node"><b>服务端</b>每秒把 timeRemaining 减 1 并写库</div>
+        <div class="chain-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="chain-node"><b>Postgres</b>行更新触发变更事件</div>
+        <div class="chain-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="chain-node"><b>公网</b>Supabase Realtime + Cloudflare 中转</div>
+        <div class="chain-arrow"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></div>
+        <div class="chain-node"><b>大屏</b>原样渲染收到的字符串</div>
+      </div>
+      <div class="outcomes">
+        <div class="outcome red"><b>延迟 → 恒定滞后</b>显示值落后一个 RTT,公网下可达数百毫秒</div>
+        <div class="outcome red"><b>断网 → 冻结</b>时间停住不动,观众一眼看穿</div>
+        <div class="outcome red"><b>恢复 → 跳变</b>追帧补上,秒数突然跳一大截</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>同一场比赛,两种模型</h2>
+    <p class="sub">横轴为比赛真实时间,纵轴为大屏显示的剩余秒数。灰色虚线是真值,绿色是我们的设计,红色是竞品当前行为。</p>
+
+    <div class="chart-wrap">
+      <svg viewBox="0 0 560 246" role="img" aria-label="两种时钟模型在网络中断下的表现对比">
+        <defs>
+          <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#c9c4b8"/>
+          </marker>
+        </defs>
+
+        <rect x="208.7" y="24" width="162.6" height="152" fill="#b06367" opacity=".09"/>
+        <line x1="208.7" y1="24" x2="208.7" y2="176" stroke="#b06367" stroke-width="1" stroke-dasharray="3 3" opacity=".45"/>
+        <line x1="371.3" y1="24" x2="371.3" y2="176" stroke="#b06367" stroke-width="1" stroke-dasharray="3 3" opacity=".45"/>
+        <text x="290" y="17" text-anchor="middle" font-size="10.5" fill="#b06367" font-family="Outfit,sans-serif">网络中断 20s</text>
+        <text x="383" y="17" font-size="10.5" fill="#b06367" font-family="Outfit,sans-serif">恢复</text>
+
+        <g stroke="#e9e3d6" stroke-width="1">
+          <line x1="46" y1="24" x2="534" y2="24"/>
+          <line x1="46" y1="62" x2="534" y2="62"/>
+          <line x1="46" y1="100" x2="534" y2="100"/>
+          <line x1="46" y1="138" x2="534" y2="138"/>
+        </g>
+
+        <polyline points="46,24 127.3,49.3 208.7,74.7 290,100 371.3,125.3 452.7,150.7 534,176"
+          fill="none" stroke="#a8a49a" stroke-width="2" stroke-dasharray="5 4"/>
+        <polyline points="46,24 127.3,49.3 208.7,74.7 290,100 371.3,125.3 452.7,150.7 534,176"
+          fill="none" stroke="#2f6f5e" stroke-width="3.4" stroke-linejoin="round" stroke-linecap="round"/>
+        <polyline points="46,24 127.3,49.3 208.7,74.7 371.3,74.7 371.3,125.3 534,176"
+          fill="none" stroke="#b06367" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+
+        <circle cx="371.3" cy="125.3" r="5.5" fill="#b06367"/>
+        <circle cx="371.3" cy="125.3" r="5.5" fill="none" stroke="#fff" stroke-width="1.6"/>
+        <text x="383" y="146" font-size="10.5" fill="#b06367" font-family="Outfit,sans-serif">追帧跳变</text>
+
+        <g font-size="10" fill="#7c7a72" font-family="Outfit,sans-serif">
+          <text x="38" y="24" text-anchor="end" dominant-baseline="middle">60</text>
+          <text x="38" y="62" text-anchor="end" dominant-baseline="middle">45</text>
+          <text x="38" y="100" text-anchor="end" dominant-baseline="middle">30</text>
+          <text x="38" y="138" text-anchor="end" dominant-baseline="middle">15</text>
+          <text x="38" y="176" text-anchor="end" dominant-baseline="middle">0</text>
+          <text x="46" y="192" text-anchor="middle">0s</text>
+          <text x="168" y="192" text-anchor="middle">15s</text>
+          <text x="290" y="192" text-anchor="middle">30s</text>
+          <text x="412" y="192" text-anchor="middle">45s</text>
+          <text x="534" y="192" text-anchor="middle">60s</text>
+          <text x="290" y="212" text-anchor="middle" font-size="11">比赛进行时间</text>
+          <text x="15" y="100" text-anchor="middle" font-size="11" transform="rotate(-90 15 100)">大屏剩余秒数</text>
+        </g>
+      </svg>
+      <div class="legend">
+        <div><span class="swatch dash"></span>真实剩余时间</div>
+        <div><span class="swatch" style="background:#2f6f5e"></span>锚点模型(我们)—— 与真值完全重合</div>
+        <div><span class="swatch" style="background:#b06367"></span>字符串同步(竞品)—— 中断即冻结,恢复即跳变</div>
+      </div>
+    </div>
+    <p class="note">绿线之所以能盖住虚线:大屏收到锚点后,用本地单调时钟自己走秒,而不是等网络喂下一个数字。断网期间它不知道「比分」变了,但它<strong>知道时间该怎么走</strong>。</p>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>锚点模型:规则是什么</h2>
+    <p class="sub">服务端不再保存「还剩 7 分 22 秒」,而是保存一个事实:<em>在服务器时刻 T,还剩 R 毫秒,且计时正在跑</em>。</p>
+
+    <div class="card">
+      <h3>状态</h3>
+      <pre><span class="k">interface</span> <span class="n">ClockAnchor</span> {
+  running: <span class="n">boolean</span>;
+  remainingMs: <span class="n">number</span>;      <span class="c">// 锚点时刻的剩余毫秒(整数)</span>
+  anchorServerTs: <span class="n">number</span>;   <span class="c">// 锚点创建时的服务器墙钟(ms)</span>
+  period: <span class="n">number</span>;
+  periodLabel: <span class="s">string</span>;
+}</pre>
+    </div>
+
+    <div class="grid2" style="margin-top:14px">
+      <div class="card">
+        <h3>服务端推算</h3>
+        <pre>remaining = clock.running
+  ? max(0, clock.remainingMs
+      - (nowServer - clock.anchorServerTs))
+  : clock.remainingMs</pre>
+        <p style="margin-top:12px">服务端自己用 <code style="font-family:var(--mono);font-size:12px">process.hrtime.bigint()</code> 的<strong>单调时钟</strong>计时,系统时间被 NTP 修正也不影响。</p>
+      </div>
+      <div class="card">
+        <h3>客户端推算</h3>
+        <pre>elapsed = serverNowEst - anchor.anchorServerTs
+remaining = anchor.running
+  ? max(0, anchor.remainingMs - elapsed)
+  : anchor.remainingMs</pre>
+        <p style="margin-top:12px">客户端用 <code style="font-family:var(--mono);font-size:12px">performance.now()</code> 单调推进 <code style="font-family:var(--mono);font-size:12px">serverNowEst</code>,墙钟只在收到消息时重置基准。<strong>任何一条消息单独都能算出当前显示值</strong>,不依赖上一条。</p>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>为什么「消息自描述」是整个设计的关键</h3>
+      <p>每条状态消息都带 <code style="font-family:var(--mono);font-size:12px">serverTs</code> 与 <code style="font-family:var(--mono);font-size:12px">seq</code>。这带来四条性质:</p>
+      <div class="outcomes" style="margin-top:12px">
+        <div class="outcome green"><b>迟到不误</b>晚到的消息自带时刻戳,算出的当前值依然正确</div>
+        <div class="outcome green"><b>重复无害</b>同一条消息重放,结果完全一致</div>
+        <div class="outcome green"><b>乱序不乱</b>按 serverTs 取最新锚点即可</div>
+        <div class="outcome green"><b>丢失可愈</b>心跳 1 秒一次,最坏 1 秒内对齐</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>时钟对齐(NTP 式)</h3>
+      <pre>offset = serverTs - (t0 + t1) / 2     <span class="c">// t0 = 发 ping, t1 = 收 pong</span>
+rtt    = t1 - t0
+<span class="c">// 取最小 RTT 样本的 offset,或做 EWMA 平滑</span>
+
+<span class="c">// 收到消息时重置基准,之后用单调时钟推进</span>
+serverNowEst(perfNow) = recvWall + offset + (perfNow - recvPerf)</pre>
+      <p style="margin-top:12px">用 <strong>最小 RTT 样本</strong>而不是平均值:抖动只会让部分样本变差,不会让最小值变差。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>断网时到底会发生什么</h2>
+    <p class="sub">把最恶劣的情况摊开看,明确哪些能接受、哪些必须为零。</p>
+
+    <div class="steps">
+      <div class="step warn">
+        <span class="tag">阶段 1 · 正常</span>
+        <h4>局域网内稳定同步</h4>
+        <p>控制台、大屏、OBS 三端各自持有同一份锚点,本地走秒。<strong>两端误差 ≤ 300ms</strong>,与网络无关。</p>
+      </div>
+      <div class="step ok">
+        <span class="tag">阶段 2 · 断网</span>
+        <h4>大屏继续走秒,比分冻结</h4>
+        <p>大屏用本地锚点继续计时,显示值与真实时间一致。<strong>比分保持最后已知值并标注离线</strong>——因为比分错一秒就是错,不能猜。控制台离线提示 + 命令本地排队重试。</p>
+      </div>
+      <div class="step ok">
+        <span class="tag">阶段 3 · 恢复</span>
+        <h4>1 秒内自愈,无跳变</h4>
+        <p>重连即拉全量 + 重置基准。错过的心跳由序号跳号检测补拉。<strong>不闪屏、不重置比分</strong>。若期间计分员按过暂停,命令会在 1 秒内补达并纠正。</p>
+      </div>
+    </div>
+
+    <div class="tbl-card" style="margin-top:18px">
+      <table>
+        <thead><tr><th>场景</th><th>大屏时钟</th><th>大屏比分</th><th>恢复后</th></tr></thead>
+        <tbody>
+          <tr><td>手机 Wi-Fi 抖动 2s</td><td>连续走秒,无跳变</td><td>不变</td><td>≤ 1.0s 自动对齐</td></tr>
+          <tr><td>手机完全断网 60s</td><td><strong>继续走秒</strong></td><td>冻结 + 离线标记</td><td>命令补发,≤ 2.0s</td></tr>
+          <tr><td>大屏与服务器断网 60s</td><td><strong>继续走秒</strong></td><td>冻结 + 离线标记</td><td>全量对齐,比分补齐 ≤ 2.0s</td></tr>
+          <tr><td>服务器进程崩溃</td><td><strong>继续走秒</strong>(锚点已在本地)</td><td>冻结</td><td>容器自动重启,≤ 3s 恢复比赛</td></tr>
+          <tr><td>大屏浏览器崩溃 / 刷新</td><td>—</td><td>—</td><td>重新加载后 ≤ 1.0s 对齐</td></tr>
+          <tr><td>系统时间被 NTP 修正 ±30s</td><td>不受影响</td><td>不受影响</td><td>内部用单调时钟</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">唯一被接受的偏差:手机断网期间若计分员按了「暂停」,该命令无法即时送达,大屏最多<strong>多跑 1 秒</strong>(心跳周期)后被纠正。有界、可接受;比分则完全冻结,绝不臆造。</p>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>系统拓扑</h2>
+    <p class="sub">所有流量只在校园局域网内往返,运行时不请求任何外部域名。</p>
+
+    <div class="chart-wrap">
+      <svg viewBox="0 0 900 340" role="img" aria-label="系统拓扑图">
+        <defs>
+          <marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="#9a958a"/>
+          </marker>
+        </defs>
+        <rect x="12" y="12" width="876" height="316" rx="16" fill="none" stroke="#d9d2c2" stroke-width="1.5" stroke-dasharray="6 5"/>
+        <text x="30" y="34" font-size="12" fill="#7c7a72" font-family="Outfit,sans-serif">校园局域网 · 零公网依赖</text>
+
+        <g stroke="#c9c4b8" stroke-width="1.8" fill="none" marker-end="url(#ar2)">
+          <path d="M226,85 L281,85 L281,168 L332,168"/>
+          <path d="M570,150 L621,150 L621,85 L672,85"/>
+          <path d="M570,186 L621,186 L621,255 L672,255"/>
+          <path d="M451,218 L451,246"/>
+        </g>
+        <g stroke="#c9c4b8" stroke-width="1.8" fill="none" marker-end="url(#ar2)">
+          <path d="M332,182 L281,182 L281,99 L226,99"/>
+        </g>
+        <text x="290" y="76" font-size="10.5" fill="#7c7a72" font-family="Outfit,sans-serif" text-anchor="middle">WebSocket</text>
+
+        <rect x="36" y="52" width="190" height="66" rx="12" fill="#fff" stroke="#e9e3d6"/>
+        <text x="131" y="80" font-size="13" fill="#14171e" font-family="Outfit,sans-serif" text-anchor="middle" font-weight="600">计分员手机</text>
+        <text x="131" y="99" font-size="11.5" fill="#7c7a72" font-family="Outfit,sans-serif" text-anchor="middle">控制台 PWA</text>
+
+        <rect x="676" y="52" width="190" height="66" rx="12" fill="#fff" stroke="#e9e3d6"/>
+        <text x="771" y="80" font-size="13" fill="#14171e" font-family="Outfit,sans-serif" text-anchor="middle" font-weight="600">大屏</text>
+        <text x="771" y="99" font-size="11.5" fill="#7c7a72" font-family="Outfit,sans-serif" text-anchor="middle">投影 / 电视 / LED</text>
+
+        <rect x="676" y="222" width="190" height="66" rx="12" fill="#fff" stroke="#e9e3d6"/>
+        <text x="771" y="250" font-size="13" fill="#14171e" font-family="Outfit,sans-serif" text-anchor="middle" font-weight="600">OBS 浏览器源</text>
+        <text x="771" y="269" font-size="11.5" fill="#7c7a72" font-family="Outfit,sans-serif" text-anchor="middle">透明叠加</text>
+
+        <rect x="336" y="120" width="230" height="96" rx="14" fill="#1b1e27"/>
+        <text x="451" y="152" font-size="14" fill="#fff" font-family="Outfit,sans-serif" text-anchor="middle" font-weight="600">BIPH 场地管理台 Server</text>
+        <text x="451" y="173" font-size="11.5" fill="#a8aebd" font-family="Outfit,sans-serif" text-anchor="middle">WS 广播 · HTTP API · 静态资源</text>
+        <text x="451" y="192" font-size="11.5" fill="#a8aebd" font-family="Outfit,sans-serif" text-anchor="middle">权威锚点 · 命令序列化</text>
+
+        <rect x="371" y="250" width="160" height="52" rx="10" fill="#fff" stroke="#e9e3d6"/>
+        <text x="451" y="272" font-size="12" fill="#14171e" font-family="Outfit,sans-serif" text-anchor="middle" font-weight="600">SQLite (WAL)</text>
+        <text x="451" y="288" font-size="10.5" fill="#7c7a72" font-family="Outfit,sans-serif" text-anchor="middle">单文件 /data</text>
+      </svg>
+    </div>
+
+    <div class="grid2" style="margin-top:14px">
+      <div class="card">
+        <h3>技术选型</h3>
+        <p><strong>TypeScript + Fastify + ws + better-sqlite3</strong>,前端 React + Vite。多阶段 Dockerfile 打成单镜像,前端产物由后端进程托管,<code style="font-family:var(--mono);font-size:12px">docker compose up -d</code> 一条命令完成。</p>
+        <p style="color:var(--muted);font-size:13.5px">不选 Next.js:纯客户端实时应用,SSR 是负担。不选 Postgres + Redis:多一个有状态服务就多一份运维。Go 单二进制更省资源,但球类插件用 TS 迭代更快。</p>
+      </div>
+      <div class="card">
+        <h3>局域网优先的三个硬约束</h3>
+        <p><strong>① 字体全部本地内置</strong> —— 竞品依赖 Google Fonts 与 cdnfonts 的七段字体,无外网时大屏数字直接掉字体。</p>
+        <p><strong>② 默认开 HTTPS</strong> —— Service Worker(PWA)与 Wake Lock(防锁屏)都要求安全上下文,<code style="font-family:var(--mono);font-size:12px">http://192.168.x.x</code> 下两者全部失效。启动时生成含局域网 IP SAN 的自签证书,HTTP 作为降级。</p>
+        <p><strong>③ 预留 AP 隔离规避</strong> —— 校园网常见客户端隔离,提供自带路由指引与「显示机本地跑服务端」模式。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>功能矩阵</h2>
+    <p class="sub">以竞品实测功能清单为对照基线。我们的差异化不在功能数量,而在时钟正确性、离线韧性、多场地与球类扩展架构。</p>
+    <div class="tbl-card">
+      <table>
+        <thead><tr><th style="width:30%">模块</th><th style="width:46%">关键需求</th><th style="width:24%">优先级</th></tr></thead>
+        <tbody>
+          <tr><td>比赛时钟(锚点)</td><td>启停 / ±1·5·10·30·60s / 设定具体时间 / 切节 / 回退节次 / 空格键</td><td><span class="pill p0">P0 核心</span></td></tr>
+          <tr><td>24 秒进攻钟</td><td>独立锚点 / Reset 24·14·30 / ±1·5 / 归零蜂鸣闪红 / 随节重置</td><td><span class="pill p0">P0</span></td></tr>
+          <tr><td>计分与队伍</td><td>+1 +2 +3 −1 / 罚球模式 / 进攻权箭头 / 主客换边 / 置 FINAL</td><td><span class="pill p0">P0</span></td></tr>
+          <tr><td>控制台(手机)</td><td>大按钮单手操作 / 防锁屏 / 防误触 / 断线提示 / 震动反馈 / 键盘兜底</td><td><span class="pill p0">P0</span></td></tr>
+          <tr><td>显示大屏</td><td>简洁大比分模板 / 全尺寸自适应 / 远距离可读 / 本地字体 / 离线不乱</td><td><span class="pill p0">P0</span></td></tr>
+          <tr><td>比赛与赛事管理</td><td>规则集配置 / 状态机 / 持久化 / 多场地管理台 / 导出</td><td><span class="pill p1">P1</span></td></tr>
+          <tr><td>球员与犯规</td><td>12 人名单 / 个人犯规 / 罚出 / 全队犯规 / BONUS / 技术与违体</td><td><span class="pill p1">P1</span></td></tr>
+          <tr><td>暂停</td><td>每队剩余次数 / 停表与停进攻钟可配 / 暂停时长</td><td><span class="pill p1">P1</span></td></tr>
+          <tr><td>事件日志与撤销</td><td>带时间戳的操作日志 / 全局撤销 / 大屏滚动播报 / 统计原料</td><td><span class="pill p1">P1</span></td></tr>
+          <tr><td>OBS 叠加与场景</td><td>透明背景 / 入场·直播·终场场景 / 自动隐藏 / 四种位置</td><td><span class="pill p1">P1</span></td></tr>
+          <tr><td>更多模板</td><td>复古 LED / 现代转播风 / 空场待机页 / 节间倒计时</td><td><span class="pill p2">P2</span></td></tr>
+          <tr><td>技术统计导出</td><td>由事件日志推导每人得分与犯规,导出 CSV / Excel</td><td><span class="pill p2">P2</span></td></tr>
+          <tr><td>球类插件</td><td>排球(验证扩展性)/ 足球 / 通用计时器 / 训练计时器</td><td><span class="pill p2">P2</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 2 2.4 6.9L21 11l-6.6 2.1L12 20l-2.4-6.9L3 11l6.6-2.1z"/></svg>多球类扩展:三层正交</h2>
+    <p class="sub">「以后加球类不返工」的关键,是把规则、球类、皮肤拆成三个互不干扰的维度。</p>
+
+    <div class="card">
+      <div class="layer">
+        <div class="layer-key"><b>模板</b><span>纯视觉皮肤</span></div>
+        <div class="chips">
+          <span class="chip hi">简洁大比分</span><span class="chip">复古 LED</span><span class="chip">现代转播风</span><span class="chip">NBA 风</span><span class="chip">FIBA 风</span>
+        </div>
+      </div>
+      <div class="layer" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--line-soft)">
+        <div class="layer-key"><b>球类</b><span>比分语义与额外状态</span></div>
+        <div class="chips">
+          <span class="chip hi">篮球(总分)</span><span class="chip">排球(局分+轮转)</span><span class="chip">网球(局-盘-分)</span><span class="chip">足球(进球+红黄牌)</span>
+        </div>
+      </div>
+      <div class="layer" style="margin-top:10px; padding-top:10px; border-top:1px dashed var(--line-soft)">
+        <div class="layer-key"><b>规则集</b><span>分节 / 节长 / 钟长 / 犯满</span></div>
+        <div class="chips">
+          <span class="chip hi">FIBA 4×10′</span><span class="chip">校规(可自定义)</span><span class="chip">3×3</span><span class="chip">半场制 2×15′</span>
+        </div>
+      </div>
+      <div class="engine">
+        <b>核心引擎</b>
+        <p>锚点时钟 · WebSocket 同步 · 事件日志 · 撤销 · 令牌 · 持久化 —— 对所有球类与规则集完全一致,新增球类时零改动。</p>
+      </div>
+    </div>
+    <p class="note">新增一个球类 = 新增一个 <code style="font-family:var(--mono);font-size:12px">sports/xxx.ts</code> 模块 + 若干模板。目录结构、注册表、模板渲染管线必须在 P0 就立起来,否则后期不是「扩展」而是「重构」。</p>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg>交付节奏</h2>
+    <p class="sub">P0 的验收线只有一条,但它是整个项目的立身之本。</p>
+    <ol class="timeline">
+      <li>
+        <h4>P0 · 能开赛 <span class="pill p0">2~3 周</span></h4>
+        <p>Docker 单容器 + SQLite + WebSocket · <strong>锚点时钟引擎</strong>(单调时钟、偏移估计、1s 心跳、序号检测、全量恢复)· 比赛创建与规则集 · 控制台(比分/比赛钟/进攻钟/进攻权/换边/防锁屏)· 1 套简洁大屏模板 · 令牌与二维码 · 本地字体。</p>
+      </li>
+      <li>
+        <h4>P1 · 完整赛事 <span class="pill p1">再 2~3 周</span></h4>
+        <p>球员名单与犯规罚出 · BONUS · 暂停 · 撤销与事件日志 · 多场地赛事管理台 · OBS 叠加与场景导演 · 3 套大屏模板 · 空场待机页 · 蜂鸣器与节间倒计时。</p>
+      </li>
+      <li>
+        <h4>P2 · 增强 <span class="pill p2">按需</span></h4>
+        <p>技术统计表导出 · 更多模板 · 通用与训练计时器 · 排球/足球插件(验证扩展性)· PWA 离线外壳 · 局域网自动发现 · 中英双语。</p>
+      </li>
+    </ol>
+    <div class="card" style="margin-top:18px; border-color:rgba(47,111,94,.3); background:var(--green-soft)">
+      <h3 style="color:#22564a">P0 验收线</h3>
+      <p style="color:#22564a">拔掉大屏网线 60 秒,大屏时间连续不跳变;恢复网络 1 秒内两端对齐且比分不丢不重;杀掉服务器进程,大屏时间依然准确,容器重启后比赛从 SQLite 完整恢复。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></svg>会踩的坑</h2>
+    <p class="sub">以下每一条都会在赛场上真实发生,而不是在开发时。</p>
+    <div class="risks">
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>Service Worker 与 Wake Lock 需要 HTTPS</h4>
+        <p>局域网 <code>http://192.168.x.x</code> 下 PWA 与防锁屏<strong>全部失效</strong>。对策:启动时自签证书(含 LAN IP SAN)默认开 HTTPS,HTTP 降级,防锁屏用静音音频循环兜底。</p>
+      </div>
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>校园网 AP 隔离</h4>
+        <p>手机访问不到同网段服务器,全场开不了赛。对策:自带路由器/热点;「显示机本地跑服务端」模式;部署文档写清排查步骤。</p>
+      </div>
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>中文队名 + 七段数码字体</h4>
+        <p>七段字体没有中文字形,队名会掉字体或乱码,大屏直接毁掉。对策:数字与文字分字体栈,或内置 CJK 子集字体。</p>
+      </div>
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>大屏电脑休眠与屏保</h4>
+        <p>合盖后时钟冻结、比分停更。对策:页面 <code>visibilitychange</code> 时立即重取锚点;部署时关闭屏保与合盖休眠。</p>
+      </div>
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>两台手机同时操作</h4>
+        <p>并发操作导致比分错乱。对策:服务端串行化 + 乐观锁(seq),冲突命令拒绝并提示「另一台设备已操作」。</p>
+      </div>
+      <div class="risk">
+        <h4><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>校赛规则五花八门</h4>
+        <p>规则集写死,现场改不动。对策:规则集<strong>数据驱动</strong>,每场比赛可覆盖默认值(节数、节长、钟长、犯满、暂停次数)。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>需要你拍板的九件事</h2>
+    <p class="sub">这些答案会直接改变实现方案,尤其是第 3、5 两项。</p>
+    <ol class="qs">
+      <li><b>大屏硬件是什么?</b>投影仪还是 LED 屏?分辨率多少?需要几块?(决定模板字号、安全区与是否多屏同步)</li>
+      <li><b>同时几块场地开赛?</b>每场地几个计分员?(决定是否需要多场地管理台,以及多设备并发防护的强度)</li>
+      <li><b>校赛规则细节?</b>几节?每节几分钟?有没有 24 秒进攻钟?犯满罚出是 5 还是 7?每队几次暂停?(直接决定默认规则集,写错现场没法用)</li>
+      <li><b>要不要球员名单和每人得分/犯规?</b>还是只要队伍总分?(FR-5 的实现量不小,影响排期)</li>
+      <li><b>部署机器是什么?</b>有没有常开的电脑 / NAS / 小主机?接校园网还是独立热点?(决定自签证书方案与 IP 规划;没有常开机器就只能让笔记本一直开着)</li>
+      <li><b>手机构成?</b>iPhone 多还是安卓多?要不要「添加到主屏幕」?(决定防锁屏与 PWA 的实现优先级,iOS 对 HTTPS 更敏感)</li>
+      <li><b>要不要直播推流?</b>OBS 在哪台机器上?带宽多少?(决定 P1 是否做完整场景导演)</li>
+      <li><b>要不要赛后技术统计?</b>需要 Excel 还是打印给教练?(决定事件日志要记到什么粒度,是否要记篮板等)</li>
+      <li><b>要不要校外远程看分?</b>(若需要,就要引入公网暴露 + 鉴权,安全模型和部署方案都要改)</li>
+    </ol>
+  </section>
+
+  <div class="foot">
+    <span>BIPH 场地管理台 · 需求分析 v0.1 · 2026-10-21</span>
+    <span>完整需求文档见 <code>docs/REQUIREMENTS.md</code></span>
+  </div>
+
+</div>
+</body>
+</html>
