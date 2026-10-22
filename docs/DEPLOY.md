@@ -184,11 +184,27 @@ cd /opt/BIPH-Scoreboard && docker compose up -d --build
 | 阶段 | 做什么 |
 |---|---|
 | `client-build` | 装依赖 → 构建前端产物 |
-| `server-build` | 装依赖 → 构建后端产物 → `npm prune --omit=dev` 砍掉 devDependencies |
-| `runtime` | 只拷编译产物,不带源码、不带工具链 |
+| `server-build` | 装依赖 → 构建后端产物 |
+| `runtime` | **自己再装一次生产依赖**(`npm ci --omit=dev`)→ 只拷编译产物,不带源码、不带工具链 |
 
 运行时镜像里没有编译工具链 —— SQLite 用的是 Node 内置的 `node:sqlite`,
 自签证书用 `node-forge` 在 JS 里生成(不调 openssl),所以 `node:24-alpine` 就够了。
+
+> **为什么 runtime 阶段要自己再装一次依赖?**
+> 这是个 **npm workspaces** 工程。某些包版本和根目录冲突时,npm 会把它们**嵌套**装到
+> 工作区自己的 `node_modules` 下 —— 比如 `@fastify/static` 装在
+> `server/node_modules/@fastify/static`,根目录的 `node_modules` 里根本没有它
+> (锁文件里写死了这个位置)。
+>
+> 如果只把 `/app/node_modules` 复制进镜像,容器里就找不到它,启动直接崩:
+>
+> ```
+> Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@fastify/static'
+> imported from /app/server/dist/index.js
+> ```
+>
+> 在 runtime 阶段自己跑一次 `npm ci --omit=dev`,npm 会按同一份锁文件把嵌套的那份
+> 也装到同样的位置,布局天然和构建阶段一致 —— 不用猜包被放在哪。
 
 ### `.dockerignore` 里必须排掉的东西
 
@@ -262,6 +278,7 @@ sudo usermod -aG docker $USER    # 重新登录生效
 | `git pull` 报 `refusing to merge unrelated histories` | 远程换过仓库或重建过。`git pull --allow-unrelated-histories origin main` |
 | 拉 GitHub 太慢/超时 | 用 `git clone --depth 1`;或把仓库搬到 Gitee / GitCode / 学校自建 GitLab(Git 格式完全一样,改个 remote 就行) |
 | `docker compose build` 时拉基础镜像超时 | Docker Hub 在国内慢。给 Docker 配一个 registry mirror,或改走路径 B(离线包) |
+| 启动报 `Cannot find package '@fastify/static'` | 镜像里缺了 npm workspaces **嵌套安装**的依赖(它装在 `server/node_modules` 下,不在根 `node_modules`)。已修:runtime 阶段改为自己跑 `npm ci --omit=dev`。你若在用旧镜像,拉最新代码重新 `docker compose up -d --build` |
 
 ---
 

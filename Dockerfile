@@ -31,8 +31,6 @@ RUN npm ci --no-audit --no-fund
 COPY shared/ shared/
 COPY server/ server/
 RUN npm run build:shared && npm run build:server
-# 裁掉 devDependencies,减小运行时镜像
-RUN npm prune --omit=dev
 
 # ------------------------------ 3. 运行时 ------------------------------
 FROM node:24-alpine AS runtime
@@ -43,11 +41,26 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     TZ=Asia/Shanghai
 
-COPY --from=server-build /app/node_modules ./node_modules
-COPY --from=server-build /app/package.json ./package.json
-COPY --from=server-build /app/shared/package.json ./shared/package.json
+# 生产依赖在运行时阶段【单独装一次】,不要靠上一阶段的 `npm prune --omit=dev`。
+#
+# 为什么:这是个 npm workspaces 工程。有些包的版本和根目录冲突时,
+# npm 会把它们【嵌套】安装到工作区自己的 node_modules 下 ——
+# 例如 @fastify/static 装在 server/node_modules/@fastify/static,
+# 根目录的 node_modules 里根本没有它(锁文件里写死了这个位置)。
+#
+# 如果只把 /app/node_modules 复制进镜像,容器里就找不到 @fastify/static,
+# 启动直接崩:
+#     Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@fastify/static'
+#
+# 在这里自己跑一次 `npm ci --omit=dev`,npm 会按同一份锁文件把嵌套的那份
+# 也装到同样的位置,布局天然和构建阶段一致 —— 不用猜包被放在哪。
+COPY package.json package-lock.json ./
+COPY shared/package.json shared/
+COPY server/package.json server/
+COPY client/package.json client/
+RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
+
 COPY --from=server-build /app/shared/dist ./shared/dist
-COPY --from=server-build /app/server/package.json ./server/package.json
 COPY --from=server-build /app/server/dist ./server/dist
 COPY --from=client-build /app/client/dist ./client/dist
 
