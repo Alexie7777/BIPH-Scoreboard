@@ -18,6 +18,7 @@ import type { Match } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { setVenueLocaleRemote } from '../lib/api';
 import { formatClock, formatSeconds, remainingMs, startCountdownMs } from '../lib/format';
+import { standbyLabel } from '../lib/standby';
 import { useMatch } from '../lib/useMatch';
 import { useTicker } from '../lib/useTicker';
 import { setScopedLocale, useI18n } from '../i18n';
@@ -184,7 +185,7 @@ export default function Display() {
       {standby ? (
         <div className="board-standby">
           <div className="s-title">{match?.presentation.titleText || match?.name || 'BIPH 场地管理台'}</div>
-          <div className="s-sub">{t('board.standby')}</div>
+          <div className="s-sub">{standbyLabel(match?.startTime, t)}</div>
           {match?.court ? <div className="s-sub">{match.court}</div> : null}
         </div>
       ) : null}
