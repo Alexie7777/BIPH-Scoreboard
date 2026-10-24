@@ -97,13 +97,32 @@ docker compose logs -f scoreboard
   → 连接被浏览器直接拦死,控制台永远显示「连接中断」
 - 大屏其实也连不上,只是它有 REST 兜底,比分照样显示,所以不容易发现
 
-**做法**:
+**做法 A(推荐:不动仓库里的文件,以后 `git pull` 不会冲突)**
+
+在 `docker-compose.yml` **旁边**建一个 `.env` 文件:
+
+```bash
+cd /opt/BIPH-Scoreboard
+printf 'CERT_NAMES=10.37.2.208\n' > .env
+```
+
+`docker-compose.yml` 里写的是 `CERT_NAMES: "${CERT_NAMES:-}"` —— 这个写法本来就是给 `.env` 用的,
+Compose 会自动读取同目录的 `.env`。`.env` 已被 `.gitignore` 排除,不会污染仓库,
+`git pull` 也不会因为它而冲突。
+
+**做法 B(直接把值写进 compose)**
 
 ```yaml
 # docker-compose.yml
 environment:
   CERT_NAMES: "10.37.2.208"        # 换成你的宿主机 IP(可逗号分隔写多个)
 ```
+
+> 做法 B 会让 `docker-compose.yml` 变成"本地已修改"的文件,以后 `git pull` 可能报
+> `Your local changes would be overwritten by merge`,得先 `git stash` 或 `git checkout -- .`
+> 把改动扔掉 —— 也就意味着升级时会把你改的 IP 冲掉。**选做法 A 就没这个麻烦。**
+
+两种做法改完都要重签证书:
 
 ```bash
 # 旧证书缓存在数据卷里,不会自动重签 —— 删掉再重启
