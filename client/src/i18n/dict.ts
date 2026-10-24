@@ -131,6 +131,12 @@ export const zhCN = {
   'shot.title': '进攻钟 {time}',
   'shot.reset': '重置 {n}s',
   'shot.reset.title': '重置回规则设定的进攻钟时长',
+  'shot.resetStart': '重置并开表',
+  'shot.resetStart.title': '复位到 {n} 秒并直接开表(投篮命中、进攻权不变时用)',
+  'shot.reset14': '14s',
+  'shot.reset14.title': '复位到 14 秒并开表(抢到进攻篮板、进攻权不变时用)',
+  'shot.violation': '24 秒违例',
+  'shot.violation.title': '确认 24 秒违例:球权转给对方,进攻钟复位到 24 秒',
 
   /* ------------------------------ 队伍卡 ------------------------------ */
   'team.possession': '进攻权',
@@ -198,6 +204,8 @@ export const zhCN = {
   'board.shotTitle': '进攻钟 {time}',
   'board.offline.title': '与服务器断开,时钟仍在本地继续走',
   'board.standby': '即将开始',
+  'board.violation': '24 秒违例',
+  'board.violation.hint': '请确认球权',
   'board.connecting': '正在连接…',
   'board.timeout.request': '{team} 请求暂停',
   'board.timeout.title': '暂停倒计时 {time}',
@@ -446,6 +454,12 @@ export const enUS: Record<MessageKey, string> = {
   'shot.title': 'Shot clock {time}',
   'shot.reset': 'Reset {n}s',
   'shot.reset.title': 'Reset to the configured shot clock length',
+  'shot.resetStart': 'Reset & start',
+  'shot.resetStart.title': 'Reset to {n}s and start right away (after a made shot, possession unchanged)',
+  'shot.reset14': '14s',
+  'shot.reset14.title': 'Reset to 14s and start (after an offensive rebound, possession unchanged)',
+  'shot.violation': '24s violation',
+  'shot.violation.title': 'Confirm a 24-second violation: possession goes to the other team, shot clock resets',
 
   /* ------------------------------ 队伍卡 ------------------------------ */
   'team.possession': 'Possession',
@@ -508,6 +522,8 @@ export const enUS: Record<MessageKey, string> = {
   'board.shotTitle': 'Shot clock {time}',
   'board.offline.title': 'Disconnected from the server — the clock keeps running locally',
   'board.standby': 'Starting soon',
+  'board.violation': '24-SECOND VIOLATION',
+  'board.violation.hint': 'Please check possession',
   'board.connecting': 'Connecting…',
   'board.timeout.request': '{team} called a timeout',
   'board.timeout.title': 'Timeout countdown {time}',

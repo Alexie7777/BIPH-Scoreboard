@@ -1629,6 +1629,54 @@ h4 {
   color: var(--text-dim);
 }
 
+/* 24 秒违例:整屏红闪,几秒后自动退下 */
+
+.board-violation {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: rgba(122, 8, 22, 0.86);
+  text-align: center;
+  pointer-events: none;
+  animation: board-violation-flash 0.55s ease-in-out 4;
+}
+
+.board-violation .v-main {
+  font-size: min(140px, 10vw);
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55);
+}
+
+.board-violation .v-hint {
+  font-size: min(40px, 3vw);
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: 0.2em;
+}
+
+@keyframes board-violation-flash {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+/* 减弱动效偏好:不闪了,但提示还在 */
+@media (prefers-reduced-motion: reduce) {
+  .board-violation {
+    animation: none;
+  }
+}
+
 /* ---------------- 二维码 / 令牌 ---------------- */
 
 .token-box {

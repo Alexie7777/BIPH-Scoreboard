@@ -41,6 +41,8 @@ export default function Display() {
   /** 开赛倒计时剩余毫秒(0 = 现在不显示) */
   const [startMs, setStartMs] = useState(0);
   const [needGesture, setNeedGesture] = useState(false);
+  /** 24 秒违例提示(进攻钟归零时由服务端广播事件触发) */
+  const [violation, setViolation] = useState(false);
 
   const matchRef = useRef<Match | null>(null);
   const serverNowRef = useRef<() => number>(() => Date.now());
@@ -53,8 +55,22 @@ export default function Display() {
     onEvent: (kind) => {
       // 手动蜂鸣:声音必须在大屏这台机器上出(现场喇叭接的是大屏电脑)。
       // 计分员按的是 iPad,那头的扬声器只够计分员自己听见。
-      if (kind !== 'buzzer') return;
-      if (matchRef.current?.presentation.soundEnabled) buzzerRef.current?.buzz('short');
+      if (kind === 'buzzer') {
+        if (matchRef.current?.presentation.soundEnabled) buzzerRef.current?.buzz('short');
+        return;
+      }
+      /*
+       * 24 秒违例:进攻钟归零。
+       *
+       * 这一下必须让全场都看见 —— 违例意味着球权要换,不提示的话
+       * 观众和球员都不知道刚才是谁违例了。所以:红闪 + 长鸣。
+       *
+       * 归零本身由服务端判定(它停表、记日志),大屏只负责表现。
+       */
+      if (kind === 'shotClockZero') {
+        setViolation(true);
+        if (matchRef.current?.presentation.soundEnabled) buzzerRef.current?.buzz('long');
+      }
     },
   });
 
@@ -151,6 +167,14 @@ export default function Display() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  /* ------------------------------------------------------ 违例提示自动收起 */
+  // 提示不能一直挂着:球权一换,场上继续打,红屏就该退下去。
+  useEffect(() => {
+    if (!violation) return;
+    const timer = window.setTimeout(() => setViolation(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [violation]);
+
   const template = match?.presentation.template ?? 'simple';
   const stretch = match?.presentation.autoFit === 'stretch';
   const offline = status === 'offline';
@@ -226,6 +250,13 @@ export default function Display() {
             <div className="big">{t('board.audio.big')}</div>
             <div className="small">{t('board.audio.small')}</div>
           </div>
+        </div>
+      ) : null}
+
+      {violation ? (
+        <div className="board-violation">
+          <div className="v-main">{t('board.violation')}</div>
+          <div className="v-hint">{t('board.violation.hint')}</div>
         </div>
       ) : null}
     </div>

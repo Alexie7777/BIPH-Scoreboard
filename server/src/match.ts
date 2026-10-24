@@ -165,6 +165,31 @@ function setSide(m: Match, side: Side, patch: Partial<Team>): void {
 }
 
 /**
+ * 让进攻钟跟着比赛钟一起走。
+ *
+ * 规则依据:进攻钟随球权走,**比赛钟停它也得停**
+ * (FIBA:The shot clock stops any time the game clock stops)。
+ *
+ * 三个边界,每一个都是现场真会踩的坑:
+ *
+ *  - **开球**(tipOff):满 24 秒起步,不是接着上一次的剩余值。
+ *    开球是新的进攻权,必须满表。
+ *  - **已经归零**:不能从 0 开始跑 —— 那样会立刻再次归零,变成死循环。
+ *    归零意味着这个进攻权已经结束了,直接复位到满。
+ *  - **本来就在跑**:不重复 start。重设锚点会带来微小跳变,
+ *    表会"顿"一下,现场看得出来。
+ */
+function followShotClock(m: Match, now: number, tipOff: boolean): void {
+  if (tipOff || currentRemaining(m.shotClock, now) <= 0) {
+    m.shotClock = resetShotClock(m.shotClock, m.rules, now, true);
+    return;
+  }
+  if (!m.shotClock.running) {
+    m.shotClock = startShotClock(m.shotClock, now);
+  }
+}
+
+/**
  * 只把【配置类】的队伍字段合并进来。
  *
  * score / fouls / timeouts 只能通过各自的计分命令改变 ——
@@ -213,20 +238,35 @@ export function applyCommand(
     }
 
     /* ---------------------------- 比赛时钟 ---------------------------- */
-    case 'clock.start':
+    case 'clock.start': {
+      // 还没开赛(status 不是 live)→ 这一下就是开球:进攻钟满 24 秒起步
+      const tipOff = m.status !== 'live';
       m.clock = startClock(m.clock, now);
       m.status = 'live';
-      log = '比赛钟开始';
+      followShotClock(m, now, tipOff);
+      log = tipOff ? '开球:比赛钟与进攻钟同时开始' : '比赛钟开始';
       break;
+    }
     case 'clock.pause':
       m.clock = pauseClock(m.clock, now);
+      // 比赛钟停,进攻钟也得停 —— 否则暂停期间进攻钟白走一截
+      m.shotClock = pauseShotClock(m.shotClock, now);
       log = '比赛钟暂停';
       break;
-    case 'clock.toggle':
+    case 'clock.toggle': {
+      const willRun = !m.clock.running;
+      const tipOff = willRun && m.status !== 'live';
       m.clock = toggleClock(m.clock, now);
       m.status = 'live';
-      log = m.clock.running ? '比赛钟开始' : '比赛钟暂停';
+      if (willRun) followShotClock(m, now, tipOff);
+      else m.shotClock = pauseShotClock(m.shotClock, now);
+      log = m.clock.running
+        ? tipOff
+          ? '开球:比赛钟与进攻钟同时开始'
+          : '比赛钟开始'
+        : '比赛钟暂停';
       break;
+    }
     case 'clock.adjust': {
       const delta = Number(p.deltaMs ?? 0);
       m.clock = adjustClock(m.clock, delta, now);
@@ -244,6 +284,9 @@ export function applyCommand(
       // 先定状态再算标签:否则从「已结束」直接跳节,标签会沿用旧的 FINAL
       m.status = 'live';
       m.clock = setPeriod(m.clock, next, m.rules, m.status, now);
+      // 新节次是跳球开球:进攻钟复位到 24(停着),
+      // 等计分员按「开始」时两个钟一起走
+      m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
       log = `进入 ${m.clock.periodLabel}`;
       events.push({ kind: 'periodEnd' });
       break;
@@ -283,8 +326,38 @@ export function applyCommand(
     }
     case 'shot.reset': {
       const seconds = typeof p.seconds === 'number' ? p.seconds : m.rules.shotClockSeconds;
-      m.shotClock = resetShotClock(m.shotClock, { ...m.rules, shotClockSeconds: seconds }, now);
-      log = `进攻钟重置 ${seconds}s`;
+      // start=true → 复位完直接开表(投篮命中后最常用的一次点击)
+      const start = p.start === true;
+      m.shotClock = resetShotClock(m.shotClock, { ...m.rules, shotClockSeconds: seconds }, now, start);
+      log = start ? `进攻钟重置 ${seconds}s 并开始` : `进攻钟重置 ${seconds}s`;
+      break;
+    }
+    /*
+     * 24 秒违例。
+     *
+     * 进攻钟归零时,服务端已经自动停了比赛钟、记了日志、让大屏提示。
+     * 这条命令是计分员确认「球不在空中,确实是违例」之后按的。
+     *
+     * 为什么球权转交和复位要人工确认:FIBA 有一条例外 ——
+     * 球在空中、进攻钟归零前已离手、随后碰到篮筐的,**不算违例**。
+     * 自动判罚会在这种情况下误判,所以最后这一步留给计分员。
+     *
+     * 做完之后:比赛钟停着、进攻钟复位到 24(停着),
+     * 计分员按「开始比赛」时两个钟一起走。
+     */
+    case 'shot.violation': {
+      const before = m.possession;
+      // 球权转给对方。原来是 null(进攻权没设)就不擅自给,
+      // 只复位进攻钟 —— 让计分员自己按「设置球权」。
+      let after: Possession = before;
+      if (before === 'home') after = 'away';
+      else if (before === 'away') after = 'home';
+      m.possession = after;
+      m.clock = pauseClock(m.clock, now);
+      m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
+      log = before !== null && after !== null
+        ? `24 秒违例,${sideOf(m, after).name}获得球权`
+        : '24 秒违例,进攻钟复位 24s';
       break;
     }
 

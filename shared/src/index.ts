@@ -385,6 +385,7 @@ export type CommandType =
   | 'shot.adjust'
   | 'shot.set'
   | 'shot.reset'
+  | 'shot.violation'
   // 犯规 / 暂停
   | 'foul.add'
   | 'foul.sub'
@@ -409,7 +410,24 @@ export interface CommandPayloadMap {
   'clock.set': { ms: number };
   'shot.adjust': { deltaMs: number };
   'shot.set': { ms: number };
-  'shot.reset': { seconds?: number };
+  /**
+   * 重置进攻钟。
+   *
+   * - `seconds`:重置到多少秒(默认用规则设定值,一般是 24)
+   * - `start`  :重置后是否**直接开表**。默认 false(重置完是停的)。
+   *   现场最常用的是"投篮命中 → 复位并开表",一次点完,不用再按一次开始。
+   *
+   * 两个字段都是可选的,老客户端只发 `{ seconds }` 的行为不变。
+   */
+  'shot.reset': { seconds?: number; start?: boolean };
+  /**
+   * 24 秒违例处理。
+   *
+   * 进攻钟归零时,服务端已经自动停了比赛钟、记了日志、让大屏提示。
+   * 这条命令是计分员确认「球不在空中,确实是违例」之后按的:
+   * 球权转给对方 + 进攻钟复位到 24(停着,等计分员按开始比赛)。
+   */
+  'shot.violation': Record<string, never>;
   'foul.add': { side: Side };
   'foul.sub': { side: Side };
   'timeout.add': { side: Side };

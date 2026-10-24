@@ -14,7 +14,7 @@ import {
   type ServerMsg,
 } from '@biph/shared';
 import { config } from './config.js';
-import { currentRemaining, endTimeoutAnchor, serverNow } from './clock.js';
+import { currentRemaining, endTimeoutAnchor, pauseClock, pauseShotClock, serverNow } from './clock.js';
 import { applyCommand, createMatch, newId, rejectReason, resetMatch } from './match.js';
 import type { Store } from './db.js';
 
@@ -482,7 +482,32 @@ export class Hub {
         this.broadcast(matchId, { t: 'event', kind: 'clockZero', at: now });
       }
       if (rt.lastShotRemaining > 0 && shotRem === 0) {
+        /*
+         * 24 秒违例 —— 进攻钟归零的那一刻自动做三件事:
+         *   1) 停比赛钟(球权要转移,表不能继续跑)
+         *   2) 记一条日志
+         *   3) 广播事件,让大屏红闪 + 蜂鸣
+         *
+         * 球权转交与复位【不自动做】:FIBA 有一条例外 ——
+         * 球在空中、进攻钟归零前已离手、随后碰到篮筐的,不算违例。
+         * 自动判罚会在这种情况下误判,所以最后这一步交给计分员
+         * 按控制台上的「24 秒违例」按钮。
+         *
+         * 这一步不走命令通道(不压撤销栈):它是时间流逝的自然结果,
+         * 不是"计分员做的一个操作" —— 和下面暂停倒计时归零自动收尾一个道理。
+         */
+        rt.match = {
+          ...rt.match,
+          clock: pauseClock(rt.match.clock, now),
+          shotClock: pauseShotClock(rt.match.shotClock, now),
+          seq: rt.match.seq + 1,
+          updatedAt: now,
+          lastEvent: '24 秒违例',
+        };
+        this.persist(rt);
+        this.store.appendLog(matchId, now, '24 秒违例');
         this.broadcast(matchId, { t: 'event', kind: 'shotClockZero', at: now });
+        this.broadcastState(matchId);
       }
       rt.lastRemaining = rem;
       rt.lastShotRemaining = shotRem;

@@ -809,3 +809,104 @@ describe('端到端:场馆语言全场一致', () => {
     expect(venue.locale).toBe('zh-CN');
   });
 });
+
+/* ============================================================================
+ * 24 秒违例:进球钟归零的完整链路
+ *
+ * 这条链路全是"时间流逝的自然结果",不经过命令通道:
+ *   归零 → 服务端自动停比赛钟 + 记日志 + 广播事件 → 大屏提示
+ * 球权转交与复位是计分员确认之后才按的命令(球在空中那条例外)。
+ * ========================================================================== */
+
+describe('端到端:24 秒违例', () => {
+  let matchId: string;
+  let controlToken: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${BASE}/api/matches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '违例测试',
+        homeName: '主队',
+        awayName: '客队',
+        rules: { periods: 4, periodMinutes: 10, shotClockSeconds: 24 },
+      }),
+    });
+    const created = (await res.json()) as { match: Match; operatorToken: string };
+    matchId = created.match.id;
+    controlToken = created.operatorToken;
+  }, 60_000);
+
+  it('开球时进攻钟跟着比赛钟一起启动', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'v0', type: 'clock.toggle', payload: {} });
+    await until(() => display.match?.clock.running === true);
+    // 联动:不需要再单独按一次进攻钟
+    expect(display.match?.shotClock.running).toBe(true);
+    expect(display.match?.shotClock.remainingMs).toBe(24_000);
+
+    display.close();
+    control.close();
+  });
+
+  it('进攻钟归零 → 服务端自动停比赛钟 + 广播事件 + 记日志', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 把进攻钟拨到 1 秒,等它归零
+    control.send({ t: 'cmd', cmdId: 'v1', type: 'shot.set', payload: { ms: 1000 } });
+    await until(() => display.match?.shotClock.remainingMs === 1000);
+
+    // 归零之后:服务端应该自动把比赛钟停住
+    await until(() => display.match?.clock.running === false, 10_000);
+    expect(display.match?.clock.running).toBe(false);
+
+    // 大屏收到了 shotClockZero 事件(用来红闪 + 蜂鸣)
+    const events = display.messages.filter((m) => m.t === 'event' && m.kind === 'shotClockZero');
+    expect(events.length).toBeGreaterThan(0);
+
+    // 日志里留了「24 秒违例」
+    const res = await fetch(`${BASE}/api/matches/${matchId}/logs`);
+    const body = (await res.json()) as { logs?: { message: string }[] };
+    const texts = (body.logs ?? []).map((l) => l.message).join('\n');
+    expect(texts).toContain('24 秒违例');
+
+    display.close();
+    control.close();
+  });
+
+  it('计分员按「24 秒违例」→ 球权转给对方 + 进攻钟复位 24(停着)', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'v2', type: 'possession.set', payload: { side: 'away' } });
+    await until(() => control.match?.possession === 'away');
+
+    control.send({ t: 'cmd', cmdId: 'v3', type: 'shot.violation', payload: {} });
+    await until(() => control.match?.possession === 'home');
+    expect(control.match?.shotClock.remainingMs).toBe(24_000);
+    expect(control.match?.shotClock.running).toBe(false);
+    expect(control.match?.clock.running).toBe(false);
+
+    control.close();
+  });
+
+  it('违例处理完按「开始比赛」→ 两个钟一起走,进攻钟是满的 24 秒', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'v4', type: 'clock.toggle', payload: {} });
+    await until(() => display.match?.clock.running === true);
+    expect(display.match?.shotClock.running).toBe(true);
+    expect(display.match?.shotClock.remainingMs).toBe(24_000);
+
+    display.close();
+    control.close();
+  });
+});

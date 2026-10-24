@@ -145,6 +145,15 @@ export default function Control() {
     role: 'control',
     token,
     onAck: handleAck,
+    onEvent: (kind) => {
+      /*
+       * 24 秒违例:进攻钟归零。
+       *
+       * 服务端已经停了表、记了日志、大屏也在闪 —— 控制台这边必须说一声,
+       * 不然计分员只看到"进攻钟 0.00"却不知道为什么停了。
+       */
+      if (kind === 'shotClockZero') pushToast(t('board.violation'), 'err');
+    },
   });
 
   const [clockMs, setClockMs] = useState(0);
@@ -436,6 +445,12 @@ export default function Control() {
                 onToggle={() => doSend('shot.toggle')}
                 onAdjust={(sec) => doSend('shot.adjust', { deltaMs: sec * 1000 })}
                 onReset={() => doSend('shot.reset', { seconds: rules.shotClockSeconds })}
+                /* 投篮命中:复位并直接开表,一次点完 */
+                onResetAndStart={() => doSend('shot.reset', { seconds: rules.shotClockSeconds, start: true })}
+                /* 抢到进攻篮板:复位到 14 秒并开表(FIBA 2014 起) */
+                onReset14={() => doSend('shot.reset', { seconds: 14, start: true })}
+                /* 确认 24 秒违例:球权转给对方 + 进攻钟复位 */
+                onViolation={() => doSend('shot.violation')}
               />
             ) : null}
           </div>

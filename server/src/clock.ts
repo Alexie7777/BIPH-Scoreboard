@@ -208,10 +208,22 @@ export function setShotClock(anchor: ClockAnchor, ms: number, now: number): Cloc
   });
 }
 
-export function resetShotClock(anchor: ClockAnchor, rules: MatchRules, now: number): ClockAnchor {
+/**
+ * 重置进攻钟。
+ *
+ * `start` 为 true 时**重置完直接开表** —— 现场最常用的是"投篮命中,
+ * 复位并开表",一次点完就行,不用重置之后再按一次开始。
+ * 默认 false(重置完是停的),保持老行为。
+ */
+export function resetShotClock(
+  anchor: ClockAnchor,
+  rules: MatchRules,
+  now: number,
+  start = false,
+): ClockAnchor {
   return createAnchor({
     remainingMs: rules.shotClockSeconds * 1000,
-    running: false,
+    running: start,
     period: anchor.period,
     periodLabel: anchor.periodLabel,
     now,

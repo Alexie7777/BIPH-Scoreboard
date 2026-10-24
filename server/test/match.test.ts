@@ -118,9 +118,10 @@ describe('暂停计数', () => {
 describe('请求暂停', () => {
   it('请求暂停 = 消耗一次额度 + 暂停比赛钟与进攻钟 + 启动大屏倒计时', () => {
     let m = freshMatch({ rules: { timeoutsPerTeam: 4, timeoutSeconds: 90 } });
-    // 先把表走起来
+    // 先把表走起来。
+    // 注意:开球时进攻钟会跟着比赛钟一起启动(见「进攻钟与比赛钟联动」),
+    // 所以这里不用再单独 shot.toggle —— 多按一下反而会把进攻钟停了。
     m = applyCommand(m, 'clock.toggle', {}, T0).match;
-    m = applyCommand(m, 'shot.toggle', {}, T0).match;
     expect(m.clock.running).toBe(true);
     expect(m.shotClock.running).toBe(true);
 
@@ -388,5 +389,158 @@ describe('计划开赛时间', () => {
     expect(rejectReason(m, 'match.update', { patch: { startTime: '19:00' } })).toBeNull();
     expect(rejectReason(m, 'match.update', { patch: { startTime: null } })).toBeNull();
     expect(rejectReason(m, 'match.update', { patch: { name: 'x' } })).toBeNull();
+  });
+});
+
+/* ============================================================================
+ * 进攻钟与比赛钟的联动
+ *
+ * 规则依据:进攻钟随球权走,比赛钟停它也停
+ * (FIBA:The shot clock stops any time the game clock stops)。
+ * ========================================================================== */
+
+describe('进攻钟与比赛钟联动', () => {
+  it('开球:比赛钟启动 → 进攻钟复位到 24 秒并一起开跑', () => {
+    const m0 = freshMatch();
+    expect(m0.status).toBe('scheduled');
+    expect(m0.shotClock.running).toBe(false);
+    expect(m0.shotClock.remainingMs).toBe(24_000);
+
+    const m = applyCommand(m0, 'clock.start', {}, T0).match;
+    expect(m.clock.running).toBe(true);
+    expect(m.shotClock.running).toBe(true);
+    expect(m.shotClock.remainingMs).toBe(24_000);
+  });
+
+  it('中途恢复:比赛钟重新启动 → 进攻钟跟着走,但剩余值不被重置', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    // 罚球/暂停之前,进攻钟被设成 12 秒
+    m = applyCommand(m, 'shot.set', { ms: 12_000 }, T0 + 1000).match;
+    m = applyCommand(m, 'clock.pause', {}, T0 + 2000).match;
+    expect(m.shotClock.running).toBe(false);
+    // 从设值到暂停又走了 1 秒,所以剩 11 秒 —— 不是 12
+    expect(m.shotClock.remainingMs).toBe(11_000);
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 3000).match;
+    expect(m.clock.running).toBe(true);
+    expect(m.shotClock.running).toBe(true);
+    // 关键:没有被打回 24 秒 —— 中途恢复是"接着走",不是"重新开始"
+    expect(m.shotClock.remainingMs).toBe(11_000);
+  });
+
+  it('比赛钟暂停 → 进攻钟跟着暂停', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'clock.pause', {}, T0 + 1000).match;
+    expect(m.clock.running).toBe(false);
+    expect(m.shotClock.running).toBe(false);
+  });
+
+  it('进攻钟归零后再按开始 → 复位到 24 秒(不会从 0 跑成死循环)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 0 }, T0 + 1000).match;
+    m = applyCommand(m, 'clock.pause', {}, T0 + 2000).match;
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 3000).match;
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(true);
+  });
+
+  it('换节 = 跳球开球:进攻钟复位到 24 秒(停着),按开始后两个钟一起走', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 8_000 }, T0 + 1000).match;
+
+    m = applyCommand(m, 'clock.nextPeriod', {}, T0 + 2000).match;
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(false);
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 3000).match;
+    expect(m.shotClock.running).toBe(true);
+    expect(m.shotClock.remainingMs).toBe(24_000);
+  });
+
+  it('进攻钟本来就在跑时,比赛钟启动不会重设它的锚点(表不跳)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 20_000 }, T0 + 1000).match;
+    const before = m.shotClock.anchorServerTs;
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 2000).match;
+    expect(m.shotClock.anchorServerTs).toBe(before);
+    expect(m.shotClock.remainingMs).toBe(20_000);
+  });
+});
+
+/* ============================================================================
+ * 进攻钟的命令
+ * ========================================================================== */
+
+describe('进攻钟命令', () => {
+  it('重置(不带 start)= 复位但停着', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 5_000 }, T0 + 1000).match;
+
+    m = applyCommand(m, 'shot.reset', { seconds: 24 }, T0 + 2000).match;
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(false);
+  });
+
+  it('重置并开表(start: true)= 复位后直接跑起来(投篮命中最常用)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 5_000 }, T0 + 1000).match;
+
+    m = applyCommand(m, 'shot.reset', { seconds: 24, start: true }, T0 + 2000).match;
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(true);
+  });
+
+  it('14 秒:抢到进攻篮板后复位到 14 并开表', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+
+    m = applyCommand(m, 'shot.reset', { seconds: 14, start: true }, T0 + 1000).match;
+    expect(m.shotClock.remainingMs).toBe(14_000);
+    expect(m.shotClock.running).toBe(true);
+  });
+
+  it('24 秒违例:球权转给对方 + 进攻钟复位 24 + 比赛钟停住', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'possession.set', { side: 'home' }, T0 + 1000).match;
+    m = applyCommand(m, 'shot.set', { ms: 0 }, T0 + 2000).match;
+
+    const r = applyCommand(m, 'shot.violation', {}, T0 + 3000);
+    expect(r.match.possession).toBe('away');
+    expect(r.match.shotClock.remainingMs).toBe(24_000);
+    expect(r.match.shotClock.running).toBe(false);
+    expect(r.match.clock.running).toBe(false);
+    expect(r.log).toContain('24 秒违例');
+  });
+
+  it('进攻权本来就是空的时候不擅自给球权,只复位进攻钟', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    expect(m.possession).toBeNull();
+
+    const r = applyCommand(m, 'shot.violation', {}, T0 + 1000);
+    expect(r.match.possession).toBeNull();
+    expect(r.match.shotClock.remainingMs).toBe(24_000);
+  });
+
+  it('违例之后按开始比赛 → 两个钟一起走,进攻钟是满的 24 秒', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'possession.set', { side: 'home' }, T0 + 1000).match;
+    m = applyCommand(m, 'shot.violation', {}, T0 + 2000).match;
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 3000).match;
+    expect(m.clock.running).toBe(true);
+    expect(m.shotClock.running).toBe(true);
+    expect(m.shotClock.remainingMs).toBe(24_000);
   });
 });
