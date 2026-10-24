@@ -54,5 +54,11 @@ docker compose ps
 echo ""
 echo " 最近 20 行日志:"
 docker compose logs --tail=20 scoreboard
+
+PORT_NUM=8080
+if [ -f .env ]; then
+  PORT_NUM=$(grep -E '^HOST_PORT=' .env 2>/dev/null | tail -1 | cut -d= -f2 | tr -d '"' | tr -d '[:space:]')
+fi
+[ -z "$PORT_NUM" ] && PORT_NUM=8080
 echo "──────────────────────────────────────────────"
-echo " 部署完成。健康检查: curl -k https://127.0.0.1:8080/api/health"
+echo " 部署完成。健康检查: curl -k https://127.0.0.1:$PORT_NUM/api/health"

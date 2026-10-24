@@ -6,9 +6,11 @@ services:
     restart: unless-stopped
     ports:
       # 局域网访问:把 8080 映射出来即可
+      # 想换端口就改同目录的 .env 里的 HOST_PORT,别直接改这里 ——
+      # 改了这个文件,以后 git pull 会因为本地改动而冲突。
       # 如果校园网开启了 AP 隔离,手机访问不到映射端口,
       # 改用 network_mode: host(见下方注释)或接独立热点。
-      - "8080:8080"
+      - "${HOST_PORT:-8080}:8080"
     environment:
       TZ: Asia/Shanghai
       PORT: "8080"
