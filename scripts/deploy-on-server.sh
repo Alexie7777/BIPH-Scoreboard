@@ -198,6 +198,22 @@ fi
 
 # ─────────────────────────── 4. 构建 + 启动 ───────────────────────────
 step "4. 构建 + 启动"
+
+# 容器名在 compose 里写死是 biph。如果这台机器上已经有一个"不属于当前项目"的
+# biph 容器(比如之前部署在别的目录),docker 会直接报
+# "container name biph is already in use" —— 那种报错很难看懂,这里提前拦下。
+if docker ps -a --format '{{.Names}}' | grep -qx 'biph'; then
+  CUR_ID=$(docker compose ps -aq 2>/dev/null | head -1)
+  EXIST_ID=$(docker inspect biph --format '{{.Id}}' 2>/dev/null)
+  if [ -z "$CUR_ID" ] || [ "$CUR_ID" != "$EXIST_ID" ]; then
+    warn "这台机器上已经有一个名为 biph 的容器,但它不属于当前目录($DEPLOY_DIR)"
+    warn "同名容器不能并存。数据在 Docker 卷里,删掉旧容器不会丢比赛。"
+    warn "先执行:docker rm -f biph"
+    die "处理完再跑一次本脚本"
+  fi
+  say "已存在本项目的 biph 容器,会原地更新"
+fi
+
 if [ "$FORCE_BUILD" = "1" ] || [ "$DO_BUILD" = "1" ]; then
   say "构建镜像(第一次要几分钟)"
   if ! docker compose build; then
@@ -211,7 +227,6 @@ fi
 
 docker compose up -d 2>&1 | tail -5
 say "容器已启动"
-
 # ─────────────────────────── 5. 等就绪 ───────────────────────────
 step "5. 等待服务就绪(最多 180 秒)"
 READY=0

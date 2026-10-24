@@ -85,8 +85,45 @@ docker compose logs -f scoreboard
 > sudo git clone git@github-biph:Alexie7777/BIPH-Scoreboard.git /opt/BIPH-Scoreboard
 > ```
 
-### 1.4 ⚠️ 必做:告诉证书你的宿主机 IP(`CERT_NAMES`)
+### 1.3 最省事:一键部署脚本
 
+不想一步步敲,直接用仓库里那个脚本,它会把 clone/更新、写配置、重签证书、
+构建、启动、自检一次做完(自检包括控制台 WebSocket 是否真的 101):
+
+```bash
+sudo bash scripts/deploy-on-server.sh --domain gt.biph.com
+```
+
+第一次跑(还没 clone):
+
+```bash
+cd /opt && sudo git clone https://github.com/Alexie7777/BIPH-Scoreboard.git BIPH-Scoreboard
+cd BIPH-Scoreboard
+sudo bash scripts/deploy-on-server.sh --domain gt.biph.com --ip 10.37.2.208 --port 18080
+```
+
+参数:
+
+| 参数 | 说明 | 默认 |
+|---|---|---|
+| `--domain <域名>` | 证书 SAN 里要带的域名(必填) | — |
+| `--ip <IP>` | 证书 SAN 里要带的 IP | 自动探测本机内网 IP |
+| `--port <端口>` | 宿主机端口 | 沿用 `.env` / 原值 / 8080 |
+| `--admin-key <密钥>` | 管理员密钥 | 1818 |
+| `--dir <目录>` | 部署目录 | `/opt/BIPH-Scoreboard` |
+| `--no-build` | 不重建镜像(只改配置时用) | — |
+| `--rebuild` | 强制重建镜像 | — |
+
+脚本是**幂等**的,可以反复跑:
+
+- 目录不存在 → clone;已存在 → `git pull`
+- 你以前手改过 `docker-compose.yml` → 先备份成 `.compose-local.patch` 再还原,
+  你填的 `CERT_NAMES` / 端口会被自动搬进 `.env`(以后 pull 不再冲突)
+- 现有证书已经包含所有 SAN → **不重签**(iPad 上装过的证书不会失效);
+  缺了才删旧证书重签
+- 最后自检:健康检查 / 首页 / 证书 SAN / 控制台与大屏 WebSocket 是否 101
+
+### 1.4 ⚠️ 必做:告诉证书你的宿主机 IP(`CERT_NAMES`)
 **这一步不做,控制台一定连不上。**
 
 自签证书的 SAN 来自 `os.networkInterfaces()`。在 Docker 里,它只能看到**容器自己的网卡**
@@ -421,6 +458,7 @@ sudo usermod -aG docker $USER    # 重新登录生效
 | 错误令牌握手 | **401**(鉴权确实生效) |
 | 数据持久化 | 卷 `biph-data` 里 db / cert / uploads 都在 |
 | `.dockerignore` | 构建上下文 73 个文件 / 0.62MB,无数据库、私钥、上传文件、`.env` |
+| 一键部署脚本 `deploy-on-server.sh` | 全新目录部署全流程通过,退出码 0;域名正确进 `DNS:` 条目、IP 进 `IP Address:` 条目;换目录遇到同名容器时给出清晰提示(而不是 docker 的原生报错) |
 
 ### 8.2 仍未在真机验证的
 
