@@ -7,7 +7,7 @@
  * 所有尺寸都是【设计画布 1920×1080 坐标系】里的 px 值,
  * 整块画布由 Display 页统一 scale。
  */
-import type { Match } from '@biph/shared';
+import type { Match, StartMode } from '@biph/shared';
 import { cssVars } from '../lib/cssVars';
 import { readableAccent } from '../lib/colors';
 import { formatClock, formatSeconds } from '../lib/format';
@@ -23,8 +23,18 @@ export interface BoardProps {
   shotRemainingMs: number;
   /** 本地推算的暂停倒计时剩余毫秒(没有暂停时为 0) */
   timeoutRemainingMs: number;
-  /** 本地推算的开赛倒计时剩余毫秒(不在"开赛前 3 分钟"窗口内时为 0) */
+  /** 本地推算的开赛倒计时剩余毫秒 */
   startRemainingMs: number;
+  /**
+   * 开赛倒计时屏该不该显示。
+   *
+   * 准点模式:只在开赛前 3 分钟那个窗口里为 true;
+   * 倒计时模式:从设定那一刻起一直是 true,**归零后仍然留着**(显示 00:00 +「开赛」),
+   * 因为"到点了"是一个状态,不是"没有倒计时" —— 该由计分员按「开始」,绝不自动开表。
+   */
+  startVisible: boolean;
+  /** 开赛模式:准点(墙钟)还是倒计时(相对时长) */
+  startMode: StartMode;
   /** 是否与服务器断开 */
   offline: boolean;
   /** 是否非等比铺满 */
@@ -42,6 +52,8 @@ export function BoardCore({
   shotRemainingMs,
   timeoutRemainingMs,
   startRemainingMs,
+  startVisible,
+  startMode,
   offline,
   accent,
 }: BoardCoreProps) {
@@ -72,13 +84,16 @@ export function BoardCore({
   /*
    * 开赛倒计时。
    *
-   * 赛程表上写着 19:00 开赛,大屏就在开赛前 3 分钟切到这一屏 ——
-   * 观众抬头就看到"还有两分多钟开球",而不是干等。
-   * 判定在本地做(墙钟),断网也照常走。
+   * 两种模式最后都落到这一屏:
+   *   - 准点模式:赛程表上写着 19:00 开赛,大屏就在开赛前 3 分钟切到这一屏;
+   *   - 倒计时模式:从设定那一刻起就一直显示,归零后留在这一屏显示「开赛」。
+   * 判定在本地做,断网也照常走。
    * 最后 10 秒转红,跟比赛钟/进攻钟的"最后阶段变红"一个规矩。
    */
-  const startActive = startRemainingMs > 0;
+  const startActive = startVisible;
   const startUrgent = startRemainingMs <= 10_000;
+  // 归零之后不再是"距开赛",而是"开赛" —— 该由计分员按开始,屏幕不替他做主
+  const startLabel = startRemainingMs > 0 ? t('board.startup.label') : t('board.startup.tipoff');
 
   return (
     <>
@@ -202,7 +217,7 @@ export function BoardCore({
       {startActive ? (
         <div className="board-startup">
           <div className="su-event">{title}</div>
-          <div className="su-label">{t('board.startup.label')}</div>
+          <div className="su-label">{startLabel}</div>
           <SevenSegment
             value={formatClock(startRemainingMs)}
             height={200}
@@ -210,7 +225,13 @@ export function BoardCore({
             dimColor="rgba(255,255,255,0.08)"
             title={t('board.startup.title', { time: formatClock(startRemainingMs) })}
           />
-          <div className="su-at">{t('board.startup.at', { time: match.startTime ?? '' })}</div>
+          {/*
+            底部那行只属于准点模式 —— 它写的是"赛程表上几点开球"。
+            倒计时模式没有"几点"这回事(那是相对时长),写出来只会是假信息。
+          */}
+          {startMode === 'scheduled' && match.startTime ? (
+            <div className="su-at">{t('board.startup.at', { time: match.startTime })}</div>
+          ) : null}
           {match.court ? <div className="su-court">{match.court}</div> : null}
         </div>
       ) : null}

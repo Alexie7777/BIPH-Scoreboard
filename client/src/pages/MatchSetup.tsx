@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { Locale, Match, MatchRules, Presentation, Team } from '@biph/shared';
+import type { Locale, Match, MatchRules, Presentation, StartMode, Team } from '@biph/shared';
 import { DEFAULT_TIMEOUT_SECONDS } from '@biph/shared';
 import {
   buildControlUrl,
@@ -26,6 +26,7 @@ import {
   type MatchConfigPatch,
 } from '../lib/api';
 import { describeContrast } from '../lib/colors';
+import { formatStartCountdownInput, parseStartCountdown, resolveStartMode } from '../lib/format';
 import { formatClockTime, setScopedLocale, useI18n } from '../i18n';
 import { AdminKeyPrompt } from '../components/AdminKeyPrompt';
 import { LanguageToggle } from '../components/LanguageToggle';
@@ -49,6 +50,9 @@ function normalizeHex(value: string, fallback: string): string {
  *
  * 比分、犯规、暂停、时钟这些运行时字段一律不参与比较:
  * 它们在比赛进行中会一直变,算进去会导致"永远显示未保存"。
+ *
+ * 「开赛模式」与「开赛倒计时」也不参与:它们是**即时生效**的
+ * (换模式点一下就走,倒计时离开输入框就起算),不是"点保存才算数"的那一类。
  */
 function configFingerprint(m: Match): string {
   const pick = (t: Team) => ({
@@ -235,6 +239,15 @@ export default function MatchSetup() {
   const [tokenInput, setTokenInput] = useState('');
   // 最近一次【服务端确认过】的配置指纹,用来算"未保存修改"
   const [savedSnapshot, setSavedSnapshot] = useState<string>('');
+  /*
+   * 开赛倒计时的输入框内容(例如 "15:00")。
+   *
+   * 它是**文本**,不是 Match 里的字段 —— Match 里存的是锚点
+   * (时长 + 起算时刻),输入框只是"还剩多久"这句话的写法。
+   */
+  const [cdText, setCdText] = useState('');
+  /** 倒计时输入的即时错误(格式不对) */
+  const [cdError, setCdError] = useState<string | null>(null);
 
   const matchId = id ?? '';
 
@@ -255,6 +268,11 @@ export default function MatchSetup() {
       const res = await getMatch(matchId);
       captureTokens(matchId, res);
       setDraft(res.match);
+      // 倒计时输入框回填:服务端存的是"时长 + 起算时刻",输入框只要那个时长
+      setCdText(
+        res.match.startCountdown ? formatStartCountdownInput(res.match.startCountdown.durationMs) : '',
+      );
+      setCdError(null);
       setServerLocale(res.match.presentation.locale ?? null);
       setSavedSnapshot(configFingerprint(res.match));
       const stored = readStoredTokens(matchId);
@@ -345,16 +363,18 @@ export default function MatchSetup() {
    *
    * 失败时回滚界面并把错误顶到顶栏,不让界面和服务器各说各话。
    */
-  async function instantPatch(body: MatchConfigPatch, revert: () => void) {
+  async function instantPatch(body: MatchConfigPatch, revert: () => void): Promise<Match | null> {
     try {
       const res = await patchMatch(matchId, body, qrToken);
       setSavedSnapshot(configFingerprint(res.match));
       setSaved(t('setup.synced'));
       setError(null);
+      return res.match;
     } catch (e) {
       revert();
       setSaved(null);
       setError(e instanceof Error ? e.message : t('setup.err.save'));
+      return null;
     }
   }
 
@@ -374,6 +394,92 @@ export default function MatchSetup() {
     void instantPatch({ presentation: patch }, () =>
       setDraft((d) => (d ? { ...d, presentation: prev } : d)),
     );
+  }
+
+  /* ------------------------------------------ 开赛模式 / 开赛倒计时 */
+
+  /** 当前这场用哪种开赛模式(老比赛没有 startMode 字段,按有没有倒计时锚点判断) */
+  const startMode: StartMode = useMemo(() => (draft ? resolveStartMode(draft) : 'scheduled'), [draft]);
+
+  /** 已经起算的倒计时时长(ms);没起算就是 null */
+  const armedCountdownMs = draft?.startCountdown?.durationMs ?? null;
+
+  /**
+   * 切换开赛模式 —— 点一下就生效。
+   *
+   * 模式是"一次成型"的选择,没有"敲到一半"的中间态,所以不用等「保存」。
+   */
+  function switchStartMode(next: StartMode) {
+    if (!draft || startMode === next) return;
+    const prev = draft.startMode ?? null;
+    setDraft((d) => (d ? { ...d, startMode: next } : d));
+    void instantPatch({ startMode: next }, () =>
+      setDraft((d) => (d ? { ...d, startMode: prev } : d)),
+    );
+  }
+
+  /**
+   * 起算 / 取消开赛倒计时。
+   *
+   * 倒计时是"从设定那一刻起算的剩余时间",所以它**不能**跟着「保存」走 ——
+   * 改个队名就把倒计时重新拉满,那是事故。
+   * 它是一个独立的即时动作:离开输入框就起算,「重新起算」按钮可以强行重来一次。
+   *
+   * 起算时刻由服务端打点(客户端的钟不准也不作数),这里只发时长。
+   */
+  async function armCountdown(durationMs: number | null) {
+    const prev = draft?.startCountdown ?? null;
+    // 先本地回显,界面不用等网络
+    setDraft((d) =>
+      d
+        ? {
+            ...d,
+            startCountdown:
+              durationMs === null ? null : { durationMs, anchorServerTs: Date.now() },
+          }
+        : d,
+    );
+    const saved = await instantPatch({ startCountdownMs: durationMs }, () =>
+      setDraft((d) => (d ? { ...d, startCountdown: prev } : d)),
+    );
+    // 用服务端给的锚点回填(起算时刻以服务器为准)
+    if (saved) {
+      setDraft((d) => (d ? { ...d, startCountdown: saved.startCountdown ?? null } : d));
+    }
+  }
+
+  /**
+   * 离开输入框时结算一次。
+   *
+   * 值没变就**不**重新起算 —— 不然手滑点一下输入框又移开,倒计时就被拉满了。
+   * 想重来一次请点「重新起算」。
+   */
+  function applyCountdownText() {
+    const text = cdText.trim();
+    if (!text) {
+      setCdError(null);
+      if (armedCountdownMs !== null) void armCountdown(null);
+      return;
+    }
+    const ms = parseStartCountdown(text);
+    if (ms === null) {
+      setCdError(t('setup.info.startCountdown.invalid'));
+      return;
+    }
+    setCdError(null);
+    if (ms === armedCountdownMs) return;
+    void armCountdown(ms);
+  }
+
+  /** 强行用输入框里的值重新起算(哪怕跟现在一模一样) */
+  function rearmCountdown() {
+    const ms = parseStartCountdown(cdText.trim());
+    if (ms === null) {
+      setCdError(t('setup.info.startCountdown.invalid'));
+      return;
+    }
+    setCdError(null);
+    void armCountdown(ms);
   }
 
   /** 有没有还没保存到服务端的修改 */
@@ -645,15 +751,73 @@ export default function MatchSetup() {
                 <input id="m-court" value={draft.court} onChange={(e) => setDraft({ ...draft, court: e.target.value })} />
               </div>
               <div className="field">
-                <label htmlFor="m-start-time">{t('setup.info.startTime')}</label>
-                <input
-                  id="m-start-time"
-                  type="time"
-                  value={draft.startTime ?? ''}
-                  onChange={(e) => setDraft({ ...draft, startTime: e.target.value || null })}
-                />
-                <small className="field-hint">{t('setup.info.startTime.hint')}</small>
+                <label htmlFor="m-start-mode">{t('setup.info.startMode')}</label>
+                <div className="mode-toggle" role="group" aria-label={t('setup.info.startMode')}>
+                  <button
+                    type="button"
+                    className={startMode === 'scheduled' ? 'on' : ''}
+                    aria-pressed={startMode === 'scheduled'}
+                    onClick={() => switchStartMode('scheduled')}
+                  >
+                    {t('setup.info.startMode.scheduled')}
+                  </button>
+                  <button
+                    type="button"
+                    className={startMode === 'countdown' ? 'on' : ''}
+                    aria-pressed={startMode === 'countdown'}
+                    onClick={() => switchStartMode('countdown')}
+                  >
+                    {t('setup.info.startMode.countdown')}
+                  </button>
+                </div>
+                <small className="field-hint">{t('setup.info.startMode.hint')}</small>
               </div>
+              {startMode === 'scheduled' ? (
+                <div className="field">
+                  <label htmlFor="m-start-time">{t('setup.info.startTime')}</label>
+                  <input
+                    id="m-start-time"
+                    type="time"
+                    value={draft.startTime ?? ''}
+                    onChange={(e) => setDraft({ ...draft, startTime: e.target.value || null })}
+                  />
+                  <small className="field-hint">{t('setup.info.startTime.hint')}</small>
+                </div>
+              ) : (
+                <div className="field">
+                  <label htmlFor="m-start-countdown">{t('setup.info.startCountdown')}</label>
+                  <div className="inline-row">
+                    <input
+                      id="m-start-countdown"
+                      className="cd-input"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="15:00"
+                      value={cdText}
+                      onChange={(e) => {
+                        setCdText(e.target.value);
+                        setCdError(null);
+                      }}
+                      onBlur={applyCountdownText}
+                    />
+                    <button type="button" className="btn small" onClick={rearmCountdown}>
+                      {t('setup.info.startCountdown.rearm')}
+                    </button>
+                  </div>
+                  {cdError ? (
+                    <small className="field-hint err">{cdError}</small>
+                  ) : armedCountdownMs !== null ? (
+                    <small className="field-hint">
+                      {t('setup.info.startCountdown.armed', {
+                        time: formatStartCountdownInput(armedCountdownMs),
+                      })}
+                    </small>
+                  ) : (
+                    <small className="field-hint">{t('setup.info.startCountdown.hint')}</small>
+                  )}
+                  <small className="field-hint">{t('setup.info.startCountdown.note')}</small>
+                </div>
+              )}
             </div>
           </div>
 

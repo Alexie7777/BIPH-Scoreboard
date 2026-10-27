@@ -152,6 +152,30 @@ export interface Presentation {
   locale?: Locale | null;
 }
 
+/**
+ * 开赛模式。
+ *
+ * - `scheduled` **准点模式**:填"几点开球"(赛程表上的 19:00),按墙钟算;
+ * - `countdown` **倒计时模式**:填"还有多久开球"(15:00),从设定那一刻起算。
+ *
+ * 两种模式最后都变成同一个东西给大屏:**一个还剩多少毫秒的倒计时**。
+ */
+export type StartMode = 'scheduled' | 'countdown';
+
+/**
+ * 开赛倒计时锚点(倒计时模式用)。
+ *
+ * 和比赛钟、进攻钟是同一套模型:
+ *   "在服务器时刻 anchorServerTs,还剩 durationMs"。
+ * 客户端拿服务器时间估计一减就得到当前剩余,断网时照常走秒。
+ */
+export interface StartCountdownAnchor {
+  /** 起算时的总时长(ms) */
+  durationMs: number;
+  /** 起算时刻(服务器时钟,epoch ms) */
+  anchorServerTs: number;
+}
+
 export interface Match {
   id: string;
   name: string;
@@ -191,6 +215,26 @@ export interface Match {
    * 老库里没有这个字段,老客户端不认识它,直接忽略即可,前后端仍然兼容。
    */
   startTime?: string | null;
+  /**
+   * 开赛模式(可选)。
+   *
+   * - `'scheduled'` 准点模式:看 `startTime` 那个墙钟(赛程表上的 19:00)
+   * - `'countdown'` 倒计时模式:看 `startCountdown` 那个锚点(还剩多久)
+   *
+   * 留空 = 老库兼容:按"有没有倒计时锚点"自动判断(有锚点就是倒计时模式)。
+   *
+   * 老库里没有这个字段,老客户端不认识它,直接忽略即可,前后端仍然兼容。
+   */
+  startMode?: StartMode | null;
+  /**
+   * 开赛倒计时锚点(可选)—— 倒计时模式用。
+   *
+   * 和比赛钟同一个模型:只存锚点,客户端本地推算,断网也准时。
+   * `durationMs` 是设定那一刻算起的总时长,`anchorServerTs` 是设定的时刻。
+   *
+   * 老库里没有这个字段,老客户端不认识它,直接忽略即可,前后端仍然兼容。
+   */
+  startCountdown?: StartCountdownAnchor | null;
   presentation: Presentation;
   /** 单调递增序号,客户端用于检测丢包 */
   seq: number;
@@ -198,6 +242,30 @@ export interface Match {
   updatedAt: number;
   /** 最近一条事件文案(大屏可播报) */
   lastEvent: string | null;
+}
+
+/**
+ * 比赛配置的补丁(命令通道 / 配置接口通用)。
+ *
+ * 与 `Partial<Match>` 的两处不同:
+ *   - `home` / `away` / `rules` / `presentation` 是**局部**补丁,不是整个替换;
+ *   - 倒计时只接受**时长**(`startCountdownMs`),不接受锚点本身 ——
+ *     "从什么时候开始算"必须由服务端打点,客户端的时钟不可信。
+ */
+export interface MatchUpdatePatch
+  extends Partial<Omit<Match, 'home' | 'away' | 'rules' | 'presentation' | 'startCountdown'>> {
+  home?: Partial<Team>;
+  away?: Partial<Team>;
+  rules?: Partial<MatchRules>;
+  presentation?: Partial<Presentation>;
+  /**
+   * 开赛倒计时时长(ms)。
+   *
+   * - 给了数字 → **从这一刻重新起算**(服务端打点);
+   * - 给了 null → 取消倒计时;
+   * - 没给这个字段 → 保持原值(不动已有的倒计时)。
+   */
+  startCountdownMs?: number | null;
 }
 
 /* ============================ 默认值 ============================ */
@@ -333,6 +401,151 @@ export function startCountdownMs(
   return diff;
 }
 
+/* ============================ 开赛模式 ============================
+ * 准点模式与倒计时模式最后都要变成同一个东西喂给大屏:
+ * "一个还剩多少毫秒的倒计时"(或者"没有倒计时")。
+ *
+ * ⚠ 两种模式用的时钟不是同一个,别混:
+ *   - 准点模式用【墙钟】 —— "19:00" 是赛程表上的时刻,必须跟球场挂钟一致;
+ *   - 倒计时模式用【服务器时间】 —— 锚点由服务端打点,用墙钟去减会算偏。
+ * 所以 resolveStartDisplay 要两个时间一起给,谁用哪个一目了然。
+ * ================================================================ */
+
+/** 开赛模式的取值 */
+export const START_MODES: readonly StartMode[] = ['scheduled', 'countdown'];
+
+/** 倒计时模式最长 24 小时(再多就该用准点模式写日期了) */
+export const MAX_START_COUNTDOWN_MS = 24 * 60 * 60 * 1000;
+
+/** "15"、"15:30" 这类输入(分钟最多 4 位,再大就超过 24 小时上限了) */
+const START_COUNTDOWN_RE = /^(\d{1,4})(?::(\d{1,2}))?$/;
+
+/** 值是不是一个合法的开赛模式 */
+export function isValidStartMode(value: unknown): value is StartMode {
+  return value === 'scheduled' || value === 'countdown';
+}
+
+/**
+ * 把"还剩多久"这句话翻译成毫秒。
+ *
+ * 接受三种写法(现场手输,能少打字就少打字):
+ *   - `"15"`    → 15 分钟
+ *   - `"15:30"` → 15 分 30 秒
+ *   - `"0:45"`  → 45 秒
+ *
+ * 返回 null = 写法不对(或者 0 / 超过 24 小时)。
+ */
+export function parseStartCountdown(text: string | null | undefined): number | null {
+  if (typeof text !== 'string') return null;
+  const m = START_COUNTDOWN_RE.exec(text.trim());
+  if (!m) return null;
+  const mm = Number(m[1]);
+  const ss = m[2] === undefined ? 0 : Number(m[2]);
+  if (!Number.isFinite(mm) || !Number.isFinite(ss)) return null;
+  // 写了秒就必须是小数位内的秒:"15:75" 不是 15 分 75 秒,那是 16 分 15 秒,会算错
+  if (m[2] !== undefined && ss > 59) return null;
+  const total = mm * 60_000 + ss * 1000;
+  if (total <= 0 || total > MAX_START_COUNTDOWN_MS) return null;
+  return total;
+}
+
+/** 毫秒 → "15:30"(输入框回填用) */
+export function formatStartCountdownInput(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** 这份数据是不是一个像样的倒计时锚点(脏数据要挡住) */
+export function isValidStartCountdownAnchor(value: unknown): value is StartCountdownAnchor {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as Partial<StartCountdownAnchor>;
+  return (
+    typeof a.durationMs === 'number' &&
+    Number.isFinite(a.durationMs) &&
+    a.durationMs > 0 &&
+    a.durationMs <= MAX_START_COUNTDOWN_MS &&
+    typeof a.anchorServerTs === 'number' &&
+    Number.isFinite(a.anchorServerTs) &&
+    a.anchorServerTs > 0
+  );
+}
+
+/**
+ * 这场比赛用哪种开赛模式。
+ *
+ * 老库没有 `startMode` 字段:那就按"有没有倒计时锚点"判断 ——
+ * 有锚点就是倒计时模式,没有就是准点模式。老数据不需要迁移。
+ */
+export function resolveStartMode(m: {
+  startMode?: StartMode | null;
+  startTime?: string | null;
+  startCountdown?: StartCountdownAnchor | null;
+}): StartMode {
+  if (isValidStartMode(m.startMode)) return m.startMode;
+  if (isValidStartCountdownAnchor(m.startCountdown)) return 'countdown';
+  return 'scheduled';
+}
+
+/** 倒计时还剩多少毫秒(不会算出负数) */
+export function startCountdownRemainingMs(
+  anchor: StartCountdownAnchor | null | undefined,
+  nowMs: number,
+): number {
+  if (!isValidStartCountdownAnchor(anchor)) return 0;
+  return Math.max(0, anchor.durationMs - (nowMs - anchor.anchorServerTs));
+}
+
+/**
+ * 大屏上的"开赛倒计时"现在该显示什么。
+ *
+ * - `{ kind: 'none' }` → 没有倒计时(大屏走待机屏)
+ * - `{ kind: 'countdown' }` → 有倒计时
+ *   - 准点模式:只在开赛前 3 分钟那个窗口里出现,到点后自动消失(回到待机屏)
+ *   - 倒计时模式:从设定那一刻就一直显示,**归零后仍然留着**(显示 00:00 + 「开赛」),
+ *     因为"到点了"是状态,不是"没有倒计时" —— 该由计分员按「开始」,绝不自动开表
+ */
+export type StartDisplay =
+  | { kind: 'none'; mode: StartMode }
+  | { kind: 'countdown'; mode: StartMode; remainingMs: number };
+
+/** 两个时钟:准点模式用墙钟,倒计时模式用服务器时间 */
+export interface StartClocks {
+  /** 墙钟(本机时间) */
+  wallMs: number;
+  /** 估算的服务器时间 */
+  serverMs: number;
+}
+
+export function resolveStartDisplay(
+  m: {
+    status: MatchStatus;
+    startMode?: StartMode | null;
+    startTime?: string | null;
+    startCountdown?: StartCountdownAnchor | null;
+  },
+  clocks: StartClocks,
+  windowMs: number = START_COUNTDOWN_WINDOW_MS,
+): StartDisplay {
+  // 比赛一旦开打(或已结束),就不该再显示"距开赛"
+  const mode = resolveStartMode(m);
+  if (m.status !== 'scheduled') return { kind: 'none', mode };
+  if (mode === 'countdown') {
+    if (!isValidStartCountdownAnchor(m.startCountdown)) return { kind: 'none', mode };
+    return {
+      kind: 'countdown',
+      mode,
+      remainingMs: startCountdownRemainingMs(m.startCountdown, clocks.serverMs),
+    };
+  }
+  const occ = nextStartOccurrence(m.startTime, clocks.wallMs);
+  if (occ === null) return { kind: 'none', mode };
+  const diff = occ - clocks.wallMs;
+  if (diff <= 0 || diff > windowMs) return { kind: 'none', mode };
+  return { kind: 'countdown', mode: 'scheduled', remainingMs: diff };
+}
+
 /** 由规则算出进攻钟总毫秒 */
 export function shotClockDurationMs(rules: MatchRules): number {
   return rules.shotClockSeconds * 1000;
@@ -438,7 +651,7 @@ export interface CommandPayloadMap {
   'timeout.end': Record<string, never>;
   'possession.set': { side: Possession };
   'match.status': { status: MatchStatus };
-  'match.update': { patch: Partial<Match> };
+  'match.update': { patch: MatchUpdatePatch };
   [k: string]: unknown;
 }
 

@@ -212,6 +212,8 @@ export const zhCN = {
   'board.startup.label': '距开赛',
   'board.startup.title': '开赛倒计时 {time}',
   'board.startup.at': '{time} 开赛',
+  /** 倒计时归零之后大屏写这句:到点了,该计分员按「开始」了 */
+  'board.startup.tipoff': '开赛',
   'board.audio.big': '点击屏幕开启音效',
   'board.audio.small': '浏览器要求先有一次点击,比赛钟归零时才会自动蜂鸣(点击后会试响一声)',
 
@@ -247,6 +249,17 @@ export const zhCN = {
   'setup.info.court': '场地号',
   'setup.info.startTime': '开赛时间',
   'setup.info.startTime.hint': '填好后,大屏会在开赛前 3 分钟开始倒计时;留空则不显示',
+  /* --- 开赛模式:准点 / 倒计时 --- */
+  'setup.info.startMode': '开赛模式',
+  'setup.info.startMode.hint': '准点模式按赛程表上的几点开球;倒计时模式直接填「还剩多久」',
+  'setup.info.startMode.scheduled': '准点模式',
+  'setup.info.startMode.countdown': '倒计时模式',
+  'setup.info.startCountdown': '剩余时间',
+  'setup.info.startCountdown.hint': '填「分:秒」,例如 15:00 表示还有 15 分钟;离开输入框即开始倒数',
+  'setup.info.startCountdown.rearm': '重新起算',
+  'setup.info.startCountdown.invalid': '剩余时间格式应为 分:秒(例如 15:00)',
+  'setup.info.startCountdown.note': '归零后大屏停在「开赛」,比赛钟仍由你按「开始」开表',
+  'setup.info.startCountdown.armed': '已设定 {time},从设定那一刻开始倒数',
   'setup.rules.title': '规则参数',
   'setup.rules.hint': '所有参数均可按本次比赛覆盖,不必改代码。',
   'setup.rules.periods': '节数',
@@ -530,6 +543,8 @@ export const enUS: Record<MessageKey, string> = {
   'board.startup.label': 'Match starts in',
   'board.startup.title': 'Tip-off countdown {time}',
   'board.startup.at': 'Tip-off at {time}',
+  /** Shown after the countdown hits zero: it is time to start, the scorer presses Start */
+  'board.startup.tipoff': 'Tip-off',
   'board.audio.big': 'Tap the screen to enable sound',
   'board.audio.small':
     'The browser needs one tap before the game clock can sound the buzzer at zero (a test beep will play)',
@@ -567,6 +582,20 @@ export const enUS: Record<MessageKey, string> = {
   'setup.info.court': 'Court',
   'setup.info.startTime': 'Tip-off time',
   'setup.info.startTime.hint': 'When set, the big screen counts down in the last 3 minutes; leave empty to hide it',
+  /* --- Start mode: scheduled / countdown --- */
+  'setup.info.startMode': 'Start mode',
+  'setup.info.startMode.hint':
+    'Scheduled follows the clock time on the schedule; countdown takes the time left until tip-off',
+  'setup.info.startMode.scheduled': 'Scheduled',
+  'setup.info.startMode.countdown': 'Countdown',
+  'setup.info.startCountdown': 'Time remaining',
+  'setup.info.startCountdown.hint':
+    'Type min:sec, e.g. 15:00 for 15 minutes; the countdown starts when you leave the field',
+  'setup.info.startCountdown.rearm': 'Restart countdown',
+  'setup.info.startCountdown.invalid': 'Time remaining must be min:sec (e.g. 15:00)',
+  'setup.info.startCountdown.note':
+    'At zero the big screen stays on Tip-off; the game clock still starts when you press Start',
+  'setup.info.startCountdown.armed': 'Set to {time}, counting down since it was armed',
   'setup.rules.title': 'Rules',
   'setup.rules.hint': 'Every value can be overridden for this match — no code changes needed.',
   'setup.rules.periods': 'Periods',

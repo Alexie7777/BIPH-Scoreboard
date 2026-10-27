@@ -3,7 +3,9 @@ import path from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import QRCode from 'qrcode';
 import {
+  MAX_START_COUNTDOWN_MS,
   isLocale,
+  isValidStartMode,
   isValidStartTime,
   parseRole,
   type CreateMatchRequest,
@@ -63,11 +65,18 @@ function withLang(url: string, locale: string | null | undefined): string {
  * 必须能只发这一个字段,否则用户在队名框里敲到一半,一个开关就会把半截队名推到现场大屏。
  * 队伍字段由 mergeTeamConfig 合并(比分/犯规/暂停一律不许带)。
  */
-type ConfigPatch = Partial<Omit<Match, 'rules' | 'presentation' | 'home' | 'away'>> & {
+type ConfigPatch = Partial<Omit<Match, 'rules' | 'presentation' | 'home' | 'away' | 'startCountdown'>> & {
   rules?: Partial<Match['rules']>;
   presentation?: Partial<Match['presentation']>;
   home?: Partial<Team>;
   away?: Partial<Team>;
+  /**
+   * 开赛倒计时时长(ms)。
+   *
+   * 给了数字 → 从这一刻重新起算;给了 null → 取消;没给 → 保持原值。
+   * 锚点(从什么时候开始算)由服务端打点,客户端只能给时长。
+   */
+  startCountdownMs?: number | null;
 };
 
 export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
@@ -184,9 +193,34 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       if (patch.startTime !== undefined && patch.startTime !== null && !isValidStartTime(patch.startTime)) {
         return reply.code(400).send({ error: '开赛时间格式应为 HH:MM' });
       }
+      // 开赛模式只认这两个值
+      if (
+        patch.startMode !== undefined &&
+        patch.startMode !== null &&
+        !isValidStartMode(patch.startMode)
+      ) {
+        return reply.code(400).send({ error: '开赛模式只能是 scheduled 或 countdown' });
+      }
+      // 倒计时时长:正数、上限 24 小时
+      const cd = patch.startCountdownMs;
+      if (cd !== undefined && cd !== null) {
+        if (typeof cd !== 'number' || !Number.isFinite(cd) || cd <= 0 || cd > MAX_START_COUNTDOWN_MS) {
+          return reply.code(400).send({ error: '倒计时时长应在 0 到 24 小时之间' });
+        }
+      }
+      const now = serverNow();
+      /*
+       * `startCountdownMs` 只是"还剩多久"这句话,不是 Match 的字段
+       * (真正存进比赛的是锚点)—— 补丁里的摘掉,老库里已经混进去的野字段也顺手清掉,
+       * 免得比赛对象里挂着一个没人认领的字段。
+       */
+      const { startCountdownMs: _countdownInput, ...rest } = patch;
+      const { startCountdownMs: _staleCountdown, ...currentClean } = current as Match & {
+        startCountdownMs?: number | null;
+      };
       const next: Match = {
-        ...current,
-        ...patch,
+        ...currentClean,
+        ...rest,
         // 队伍只允许改配置字段(队名/队色/logo),
         // 比分与犯规暂停必须走命令通道,否则锚点语义与撤销栈会全部对不上
         home: mergeTeamConfig(current.home, patch.home ?? {}),
@@ -202,6 +236,18 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
             : typeof patch.startTime === 'string'
               ? patch.startTime.trim()
               : current.startTime ?? null,
+        // 开赛模式:只认登记过的两个值,其余沿用当前值
+        startMode: isValidStartMode(patch.startMode) ? patch.startMode : current.startMode ?? null,
+        /*
+         * 开赛倒计时:客户端只给时长,"从什么时候开始算"由服务端打点。
+         * 没给这个字段 = 保持原锚点(改个队名不该把倒计时重新起算)。
+         */
+        startCountdown:
+          cd === null
+            ? null
+            : typeof cd === 'number'
+              ? { durationMs: cd, anchorServerTs: now }
+              : current.startCountdown ?? null,
         // 时钟与比分必须走命令通道(保证锚点语义正确),这里一律沿用当前值
         id: current.id,
         clock: current.clock,
@@ -212,7 +258,7 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         status: current.status,
         seq: current.seq,
         createdAt: current.createdAt,
-        updatedAt: serverNow(),
+        updatedAt: now,
       };
       hub.replaceMatch(next);
       const t = hub.tokensOf(req.params.id);

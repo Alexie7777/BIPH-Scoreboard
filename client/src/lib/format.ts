@@ -10,13 +10,20 @@ import {
   buildPeriodLabel,
   formatClock,
   formatSeconds,
+  isValidStartMode,
   isValidStartTime,
   nextStartOccurrence,
   periodDurationMs,
   remainingMs,
+  resolveStartDisplay,
+  resolveStartMode,
   shotClockDurationMs,
   startCountdownMs,
+  startCountdownRemainingMs,
+  parseStartCountdown,
+  formatStartCountdownInput,
   type MatchStatus,
+  type StartMode,
 } from '@biph/shared';
 import { translate, type Locale } from '../i18n';
 
@@ -24,13 +31,20 @@ export {
   buildPeriodLabel,
   formatClock,
   formatSeconds,
+  formatStartCountdownInput,
+  isValidStartMode,
   isValidStartTime,
   nextStartOccurrence,
+  parseStartCountdown,
   periodDurationMs,
   remainingMs,
+  resolveStartDisplay,
+  resolveStartMode,
   shotClockDurationMs,
   startCountdownMs,
+  startCountdownRemainingMs,
 };
+export type { StartMode };
 
 /** 状态 → 界面标签(按当前语言) */
 export function statusLabel(status: MatchStatus, locale: Locale): string {

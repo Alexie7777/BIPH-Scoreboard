@@ -2,7 +2,9 @@ import {
   DEFAULT_PRESENTATION,
   DEFAULT_RULES,
   DEFAULT_TIMEOUT_SECONDS,
+  MAX_START_COUNTDOWN_MS,
   buildPeriodLabel,
+  isValidStartMode,
   isValidStartTime,
   periodDurationMs,
   shotClockDurationMs,
@@ -12,6 +14,7 @@ import {
   type Match,
   type MatchRules,
   type MatchStatus,
+  type MatchUpdatePatch,
   type Possession,
   type Presentation,
   type Side,
@@ -507,7 +510,7 @@ export function applyCommand(
       break;
     }
     case 'match.update': {
-      const patch = (p.patch ?? {}) as Partial<Match>;
+      const patch = (p.patch ?? {}) as MatchUpdatePatch;
       // 只允许改配置类字段,不允许通过这条命令改比分/时钟
       const next = clone(m);
       if (typeof patch.name === 'string') next.name = patch.name;
@@ -521,6 +524,16 @@ export function applyCommand(
       // 计划开赛时间:只认 "HH:MM";传 null 表示清空(不显示开赛倒计时)
       if (patch.startTime === null) next.startTime = null;
       else if (typeof patch.startTime === 'string') next.startTime = patch.startTime.trim();
+      // 开赛模式:准点(墙钟)还是倒计时(相对时长)
+      if (isValidStartMode(patch.startMode)) next.startMode = patch.startMode;
+      /*
+       * 开赛倒计时:客户端只给【时长】,"从什么时候开始算"必须由服务端打点 ——
+       * 客户端的时钟不能当真,现场几台设备的钟未必一样准。
+       */
+      if (patch.startCountdownMs === null) next.startCountdown = null;
+      else if (typeof patch.startCountdownMs === 'number') {
+        next.startCountdown = { durationMs: patch.startCountdownMs, anchorServerTs: now };
+      }
       // 规则变化后,节次标签要跟着重算
       next.clock = {
         ...next.clock,
@@ -583,6 +596,23 @@ export function rejectReason(m: Match, type: CommandType, payload: unknown): str
       const st = patch.startTime;
       if (st !== undefined && st !== null && !isValidStartTime(st)) {
         return '开赛时间格式应为 HH:MM';
+      }
+      // 开赛模式只认这两个值,别的当成脏数据
+      const mode = patch.startMode;
+      if (mode !== undefined && mode !== null && !isValidStartMode(mode)) {
+        return '开赛模式只能是 scheduled 或 countdown';
+      }
+      // 倒计时时长:正数、上限 24 小时
+      const sc = patch.startCountdownMs;
+      if (sc !== undefined && sc !== null) {
+        if (
+          typeof sc !== 'number' ||
+          !Number.isFinite(sc) ||
+          sc <= 0 ||
+          sc > MAX_START_COUNTDOWN_MS
+        ) {
+          return '倒计时时长应在 0 到 24 小时之间';
+        }
       }
       return null;
     }

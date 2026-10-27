@@ -380,6 +380,66 @@ h4 {
   color: var(--text-faint, #6b7690);
 }
 
+/* 说明文字里的错误(比如"剩余时间格式不对") */
+.field-hint.err {
+  color: var(--danger);
+}
+
+/* 输入框旁边带一个按钮(倒计时:输入框 + 「重新起算」) */
+.inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inline-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* 倒计时输入框:只放 "15:00" 这种短文本,窄一点免得把整行撑开 */
+.cd-input {
+  max-width: 140px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 模式切换(准点 / 倒计时):两颗按钮做成一个整体 */
+.mode-toggle {
+  display: inline-flex;
+  align-items: stretch;
+  align-self: flex-start;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.mode-toggle button {
+  border: 0;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 9px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.mode-toggle button + button {
+  border-left: 1px solid var(--line);
+}
+
+.mode-toggle button:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--panel);
+}
+
+.mode-toggle button.on {
+  background: var(--accent);
+  color: #0b0e14;
+}
+
 .field > label {
   font-size: 13px;
   color: var(--text-dim);

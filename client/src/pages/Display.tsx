@@ -14,10 +14,10 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import type { Match } from '@biph/shared';
+import type { Match, StartMode } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { setVenueLocaleRemote } from '../lib/api';
-import { formatClock, formatSeconds, remainingMs, startCountdownMs } from '../lib/format';
+import { formatClock, formatSeconds, remainingMs, resolveStartDisplay } from '../lib/format';
 import { standbyLabel } from '../lib/standby';
 import { useMatch } from '../lib/useMatch';
 import { useTicker } from '../lib/useTicker';
@@ -40,6 +40,10 @@ export default function Display() {
   const [timeoutMs, setTimeoutMs] = useState(0);
   /** 开赛倒计时剩余毫秒(0 = 现在不显示) */
   const [startMs, setStartMs] = useState(0);
+  /** 开赛倒计时屏该不该显示(倒计时模式归零后仍然是 true) */
+  const [startOn, setStartOn] = useState(false);
+  /** 开赛模式:准点(墙钟)还是倒计时(相对时长) */
+  const [startMode, setStartMode] = useState<StartMode>('scheduled');
   const [needGesture, setNeedGesture] = useState(false);
   /** 24 秒违例提示(进攻钟归零时由服务端广播事件触发) */
   const [violation, setViolation] = useState(false);
@@ -126,12 +130,14 @@ export default function Display() {
     // 暂停倒计时:同样是锚点,断网时靠本地推算照样走秒
     const to = m.timeout ? remainingMs(m.timeout, now) : 0;
     /*
-     * 开赛倒计时:赛程表上的墙钟时间(19:00),不是锚点 ——
-     * 但同样在本地算,断网照常走。
+     * 开赛倒计时:两种模式最后都变成"还剩多少毫秒"。
+     *   - 准点模式:赛程表上的墙钟(19:00),只在开赛前 3 分钟那个窗口出现;
+     *   - 倒计时模式:锚点(设定那一刻起算),从设定起一直显示,归零后仍然留着。
+     * 两种模式都在本地算,断网照常走。
      * 只在"还没开赛"时算:比赛一旦开始,就不该再显示"距开赛"。
      */
-    const sc = m.status === 'scheduled' ? startCountdownMs(m.startTime, now) : null;
-    const st = sc ?? 0;
+    const sd = resolveStartDisplay(m, { wallMs: Date.now(), serverMs: now });
+    const st = sd.kind === 'countdown' ? sd.remainingMs : 0;
 
     const soundOn = m.presentation.soundEnabled;
 
@@ -153,6 +159,8 @@ export default function Display() {
     setShotMs((prev) => (formatSeconds(prev) !== formatSeconds(s) ? s : prev));
     setTimeoutMs((prev) => (prev !== to ? to : prev));
     setStartMs((prev) => (prev !== st ? st : prev));
+    setStartOn((prev) => (prev !== (sd.kind === 'countdown') ? sd.kind === 'countdown' : prev));
+    setStartMode((prev) => (prev !== sd.mode ? sd.mode : prev));
   });
 
   /* ------------------------------------------------------ 全屏快捷键 */
@@ -187,20 +195,22 @@ export default function Display() {
       shotRemainingMs: shotMs,
       timeoutRemainingMs: timeoutMs,
       startRemainingMs: startMs,
+      startVisible: startOn,
+      startMode,
       offline,
       stretch,
     };
     if (template === 'led') return <LedBoard {...props} />;
     if (template === 'broadcast') return <BroadcastBoard {...props} />;
     return <SimpleBoard {...props} />;
-  }, [match, clockMs, shotMs, timeoutMs, startMs, offline, stretch, template]);
+  }, [match, clockMs, shotMs, timeoutMs, startMs, startOn, startMode, offline, stretch, template]);
 
   /*
    * 待机层:还没开赛时铺满整个大屏。
    * 开赛倒计时亮着的时候不画它 —— 倒计时那一屏本身就是"即将开始",
    * 两层叠在一起只会互相挡。
    */
-  const standby = !!match && match.status === 'scheduled' && startMs <= 0;
+  const standby = !!match && match.status === 'scheduled' && !startOn;
 
   return (
     <div className="display-root">
@@ -209,7 +219,7 @@ export default function Display() {
       {standby ? (
         <div className="board-standby">
           <div className="s-title">{match?.presentation.titleText || match?.name || 'BIPH 场地管理台'}</div>
-          <div className="s-sub">{standbyLabel(match?.startTime, t)}</div>
+          <div className="s-sub">{standbyLabel(match, t)}</div>
           {match?.court ? <div className="s-sub">{match.court}</div> : null}
         </div>
       ) : null}

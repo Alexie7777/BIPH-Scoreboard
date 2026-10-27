@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DEFAULT_RULES, type Match } from '@biph/shared';
 import { I18nProvider } from '../i18n';
-import { BoardCore } from './BoardCore';
+import { BoardCore, type BoardCoreProps } from './BoardCore';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,7 +71,7 @@ function makeMatch(patch: Partial<Match> = {}): Match {
   };
 }
 
-function render(match: Match): string {
+function render(match: Match, props: Partial<BoardCoreProps> = {}): string {
   return renderToStaticMarkup(
     <I18nProvider>
       <BoardCore
@@ -80,8 +80,11 @@ function render(match: Match): string {
         shotRemainingMs={24_000}
         timeoutRemainingMs={0}
         startRemainingMs={0}
+        startVisible={false}
+        startMode="scheduled"
         offline={false}
         accent="#ffb020"
+        {...props}
       />
     </I18nProvider>,
   );
@@ -127,5 +130,43 @@ describe('大屏模板', () => {
     const css = readFileSync(path.join(HERE, '../styles/global.css'), 'utf8');
     expect(css).toContain('.board-team--away .t-name');
     expect(css).toMatch(/\.board-team--away \.t-name \{[^}]*row-reverse/);
+  });
+});
+
+/*
+ * 开赛倒计时屏。
+ *
+ * 两种模式最后都落到这一屏,但写法不同:
+ *   - 准点模式:底部写「19:00 开赛」(赛程表上几点开球);
+ *   - 倒计时模式:没有"几点"这回事,底部不写 —— 写了反而是假信息。
+ * 归零之后写「开赛」而不是「距开赛」:到点了,该计分员按「开始」了。
+ */
+describe('开赛倒计时屏', () => {
+  it('准点模式:底部写几点开赛', () => {
+    const m = makeMatch({ status: 'scheduled', startTime: '19:00' });
+    const html = render(m, { startVisible: true, startRemainingMs: 150_000, startMode: 'scheduled' });
+    expect(html).toContain('19:00 开赛');
+    expect(html).toContain('距开赛');
+  });
+
+  it('倒计时模式:只写剩余时间,不写"几点开赛"', () => {
+    const m = makeMatch({ status: 'scheduled', startTime: '19:00' });
+    const html = render(m, { startVisible: true, startRemainingMs: 900_000, startMode: 'countdown' });
+    expect(html).toContain('距开赛');
+    expect(html).not.toContain('19:00 开赛');
+  });
+
+  it('倒计时归零:写「开赛」,屏幕继续留着等计分员按开始', () => {
+    const m = makeMatch({ status: 'scheduled' });
+    const html = render(m, { startVisible: true, startRemainingMs: 0, startMode: 'countdown' });
+    expect(html).toContain('开赛');
+    expect(html).not.toContain('距开赛');
+    expect(html).toContain('board-startup');
+  });
+
+  it('没有倒计时:这一屏不出现', () => {
+    const m = makeMatch({ status: 'scheduled' });
+    const html = render(m, { startVisible: false, startRemainingMs: 0, startMode: 'countdown' });
+    expect(html).not.toContain('board-startup');
   });
 });

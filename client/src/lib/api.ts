@@ -206,13 +206,20 @@ export async function createMatch(payload: CreateMatchRequest): Promise<CreateMa
  *
  * home / away 同理:上传 Logo 这种"一次性的完整动作"要能只发 logoUrl,
  * 不能顺带把用户正在输入的队名也推上去。
+ *
+ * 开赛倒计时只接受**时长**(`startCountdownMs`):锚点(从什么时候开始算)
+ * 由服务端打点,客户端的时钟不能当真。
  */
-export type MatchConfigPatch = Partial<Omit<Match, 'rules' | 'presentation' | 'home' | 'away'>> & {
+export type MatchConfigPatch = Partial<
+  Omit<Match, 'rules' | 'presentation' | 'home' | 'away' | 'startCountdown'>
+> & {
   rules?: Partial<MatchRules>;
   presentation?: Partial<Presentation>;
   /** 队伍配置补丁:只带要改的那几个字段 */
   home?: Partial<Team>;
   away?: Partial<Team>;
+  /** 开赛倒计时时长(ms):给了就重新起算,null = 取消,不给 = 保持原值 */
+  startCountdownMs?: number | null;
 };
 
 /**

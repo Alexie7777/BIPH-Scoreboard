@@ -548,6 +548,51 @@ describe('端到端:断网时计时器依然准确', () => {
     display.close();
   });
 
+  it('开赛倒计时:给了时长就起算,大屏立刻收到;改别的字段不会把它重新拉满', async () => {
+    const display = await connect(matchId, 'display');
+    await until(() => display.match !== null);
+
+    const patch = (body: unknown) =>
+      fetch(`${BASE}/api/matches/${matchId}`, {
+        method: 'PATCH',
+        headers: {
+          'content-type': 'application/json',
+          'x-control-token': controlToken,
+        },
+        body: JSON.stringify(body),
+      });
+
+    // 切到倒计时模式 + 给 15 分钟 → 服务端在这一刻打点起算
+    const res = await patch({ startMode: 'countdown', startCountdownMs: 15 * 60_000 });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { match: Match };
+    expect(body.match.startMode).toBe('countdown');
+    expect(body.match.startCountdown?.durationMs).toBe(900_000);
+    expect(body.match.startCountdown?.anchorServerTs).toBeGreaterThan(0);
+    await until(() => display.match?.startCountdown?.durationMs === 900_000);
+    const anchor = body.match.startCountdown?.anchorServerTs ?? 0;
+
+    // 改个队名 → 倒计时不能被重新起算(锚点必须原封不动)
+    await patch({ name: '校赛A场(改名)' });
+    const after = (await (await fetch(`${BASE}/api/matches/${matchId}`)).json()) as { match: Match };
+    expect(after.match.name).toBe('校赛A场(改名)');
+    expect(after.match.startCountdown?.anchorServerTs).toBe(anchor);
+    expect(after.match.startCountdown?.durationMs).toBe(900_000);
+
+    // 传 null → 取消倒计时
+    await patch({ startCountdownMs: null });
+    const cleared = (await (await fetch(`${BASE}/api/matches/${matchId}`)).json()) as { match: Match };
+    expect(cleared.match.startCountdown).toBeNull();
+
+    // 非法时长 → 当场 400,不能进库
+    const bad = await patch({ startCountdownMs: -5 });
+    expect(bad.status).toBe(400);
+
+    // 还原
+    await patch({ name: '校赛A场', startMode: 'scheduled', startCountdownMs: null });
+    display.close();
+  });
+
   it('只发一个开关字段,不会把其他规则冲掉', async () => {
     const patch = (body: unknown) =>
       fetch(`${BASE}/api/matches/${matchId}`, {

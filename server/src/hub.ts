@@ -5,6 +5,7 @@ import {
   DEFAULT_VENUE_LOCALE,
   buildPeriodLabel,
   isLocale,
+  isValidStartCountdownAnchor,
   type ClientMsg,
   type CommandType,
   type Locale,
@@ -96,6 +97,10 @@ export class Hub {
         match.rules.timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
       }
       if (!match.timeout) match.timeout = endTimeoutAnchor();
+      // 形状不对的开赛倒计时锚点(脏数据)直接丢掉 —— 宁可没有倒计时,也不能算出个怪数字
+      if (match.startCountdown && !isValidStartCountdownAnchor(match.startCountdown)) {
+        match.startCountdown = null;
+      }
       // 语言以场馆为准:老库里各场比赛存的语言可能五花八门,启动时统一成场馆语言
       const localeDirty = match.presentation.locale !== this.venueLocale;
       match.presentation = { ...match.presentation, locale: this.venueLocale };

@@ -393,6 +393,71 @@ describe('计划开赛时间', () => {
 });
 
 /* ============================================================================
+ * 开赛模式(准点 / 倒计时)
+ *
+ * 倒计时是"从设定那一刻起算的剩余时间",所以:
+ *   - 客户端只给时长,起算时刻由服务端打点(客户端的钟不能当真);
+ *   - 没带这个字段 = 保持原锚点(改个队名不该把倒计时重新拉满)。
+ * ========================================================================== */
+describe('开赛模式与倒计时', () => {
+  it('match.update 可以切换开赛模式', () => {
+    const m = freshMatch();
+    const res = applyCommand(m, 'match.update', { patch: { startMode: 'countdown' } }, T0);
+    expect(res.match.startMode).toBe('countdown');
+  });
+
+  it('给了时长 → 服务端在这一刻打点起算', () => {
+    const m = freshMatch();
+    const res = applyCommand(
+      m,
+      'match.update',
+      { patch: { startMode: 'countdown', startCountdownMs: 15 * 60_000 } },
+      T0,
+    );
+    expect(res.match.startCountdown).toEqual({ durationMs: 900_000, anchorServerTs: T0 });
+  });
+
+  it('传 null → 取消倒计时', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'match.update', { patch: { startCountdownMs: 900_000 } }, T0).match;
+    m = applyCommand(m, 'match.update', { patch: { startCountdownMs: null } }, T0).match;
+    expect(m.startCountdown).toBeNull();
+  });
+
+  it('没带这个字段 → 保持原锚点(局部补丁不许把别的字段冲掉)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'match.update', { patch: { startCountdownMs: 900_000 } }, T0).match;
+    m = applyCommand(m, 'match.update', { patch: { name: '改名后的场次' } }, T0 + 60_000).match;
+    expect(m.startCountdown).toEqual({ durationMs: 900_000, anchorServerTs: T0 });
+    expect(m.name).toBe('改名后的场次');
+  });
+
+  it('模式不认 → 拒绝,并给出原因', () => {
+    const m = freshMatch();
+    expect(rejectReason(m, 'match.update', { patch: { startMode: 'later' } })).toBe(
+      '开赛模式只能是 scheduled 或 countdown',
+    );
+  });
+
+  it('时长不合法(0 / 负数 / 不是数 / 超过 24 小时)→ 拒绝', () => {
+    const m = freshMatch();
+    const reason = '倒计时时长应在 0 到 24 小时之间';
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: 0 } })).toBe(reason);
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: -1 } })).toBe(reason);
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: '15:00' } })).toBe(reason);
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: 25 * 3600_000 } })).toBe(reason);
+  });
+
+  it('合法值或没带这个字段 → 放行', () => {
+    const m = freshMatch();
+    expect(rejectReason(m, 'match.update', { patch: { startMode: 'countdown' } })).toBeNull();
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: 900_000 } })).toBeNull();
+    expect(rejectReason(m, 'match.update', { patch: { startCountdownMs: null } })).toBeNull();
+    expect(rejectReason(m, 'match.update', { patch: { name: 'x' } })).toBeNull();
+  });
+});
+
+/* ============================================================================
  * 进攻钟与比赛钟的联动
  *
  * 规则依据:进攻钟随球权走,比赛钟停它也停
