@@ -589,6 +589,7 @@ export type CommandType =
   | 'clock.toggle'
   | 'clock.adjust'
   | 'clock.set'
+  | 'clock.reset'
   | 'clock.nextPeriod'
   | 'clock.prevPeriod'
   // 进攻钟
@@ -621,6 +622,19 @@ export interface CommandPayloadMap {
   'score.sub': { side: Side; points: 1 };
   'clock.adjust': { deltaMs: number };
   'clock.set': { ms: number };
+  /**
+   * 重置本节。
+   *
+   * 比赛钟回到本节总时长、进攻钟回到满时长,**两个钟都停着** ——
+   * 等计分员按「开始比赛」时两个钟一起走。
+   *
+   * 为什么不是"只把比赛钟拉满":篮球里"回到本节开始"是一个整体动作。
+   * 只把比赛钟拉满、却留着进攻钟(可能还在走、还剩 16 秒),
+   * 现场看到的就是两个钟对不上 —— 那是出了事故,不是一个可用的状态。
+   *
+   * 没有载荷:重置到哪里是规则决定的(本节时长、进攻钟满值),不需要现场再指定。
+   */
+  'clock.reset': Record<string, never>;
   'shot.adjust': { deltaMs: number };
   'shot.set': { ms: number };
   /**

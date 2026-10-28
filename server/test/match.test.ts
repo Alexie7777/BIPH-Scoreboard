@@ -540,6 +540,67 @@ describe('进攻钟与比赛钟联动', () => {
 });
 
 /* ============================================================================
+ * 重置本节(clock.reset)
+ *
+ * 现场真踩过的坑:控制台那个「重置」早先只重置比赛钟,进攻钟原样留着
+ * (还剩 16 秒、还在走) —— 两个钟对不上,看着就是出了事故。
+ * ========================================================================== */
+
+describe('重置本节', () => {
+  it('比赛钟回到本节总时长、进攻钟回到满值,两个钟都停着', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 16_000 }, T0 + 1000).match;
+    // 重置前:进攻钟还剩 16 秒,而且在走
+    expect(m.shotClock.remainingMs).toBe(16_000);
+    expect(m.shotClock.running).toBe(true);
+
+    m = applyCommand(m, 'clock.reset', {}, T0 + 2000).match;
+    expect(m.clock.remainingMs).toBe(600_000);
+    expect(m.clock.running).toBe(false);
+    // 关键:进攻钟也归位了
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(false);
+  });
+
+  it('重置后按「开始比赛」:两个钟一起走', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'clock.reset', {}, T0 + 1000).match;
+    expect(m.clock.running).toBe(false);
+    expect(m.shotClock.running).toBe(false);
+
+    m = applyCommand(m, 'clock.start', {}, T0 + 2000).match;
+    expect(m.clock.running).toBe(true);
+    expect(m.shotClock.running).toBe(true);
+    expect(m.shotClock.remainingMs).toBe(24_000);
+  });
+
+  it('重置只动两个钟:比分、犯规、节次都不动', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'score.add', { side: 'home', points: 3 }, T0).match;
+    m = applyCommand(m, 'foul.add', { side: 'away' }, T0 + 1000).match;
+    m = applyCommand(m, 'clock.nextPeriod', {}, T0 + 2000).match;
+    expect(m.clock.period).toBe(2);
+
+    m = applyCommand(m, 'clock.reset', {}, T0 + 3000).match;
+    expect(m.home.score).toBe(3);
+    expect(m.away.fouls).toBe(1);
+    expect(m.clock.period).toBe(2);
+    expect(m.clock.periodLabel).toBe('Q2');
+  });
+
+  it('重置的进攻钟满值跟着规则走(本场设 20 秒就回到 20 秒)', () => {
+    let m = freshMatch({ rules: { shotClockSeconds: 20 } });
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 3_000 }, T0 + 1000).match;
+
+    m = applyCommand(m, 'clock.reset', {}, T0 + 2000).match;
+    expect(m.shotClock.remainingMs).toBe(20_000);
+  });
+});
+
+/* ============================================================================
  * 进攻钟的命令
  * ========================================================================== */
 

@@ -1612,13 +1612,16 @@ h4 {
   color: var(--board-fg, #fff);
 }
 
+/*
+ * 进攻钟区。
+ *
+ * 这里只放倒计时数字本身 —— 早先那个固定的"24"(本场设定的进攻钟时长)
+ * 已经去掉:它跟数字并排、同字号,看着像数字的一部分。
+ */
 .board-center .shot-wrap {
   display: flex;
   align-items: center;
-  gap: 16px;
-  font-size: 40px;
-  font-weight: 800;
-  color: var(--text-dim);
+  justify-content: center;
 }
 
 .board-center .shot-wrap.low .seg {

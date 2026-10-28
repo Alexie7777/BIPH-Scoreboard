@@ -66,6 +66,8 @@ export function describeCommand(
       return { key: 'toast.clock.adjust', vars: { delta: signedSeconds(p.deltaMs) } };
     case 'clock.set':
       return { key: 'toast.clock.set' };
+    case 'clock.reset':
+      return { key: 'toast.clock.reset' };
     case 'clock.nextPeriod':
       return { key: 'toast.clock.period' };
     case 'clock.prevPeriod':

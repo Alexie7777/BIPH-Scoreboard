@@ -282,6 +282,22 @@ export function applyCommand(
       log = '比赛钟设定';
       break;
     }
+    case 'clock.reset': {
+      /*
+       * 重置本节 = 本节从头开始。
+       *
+       * 比赛钟回到本节总时长、进攻钟回到满时长,**两个钟都停着** ——
+       * 计分员按「开始比赛」时两个钟一起走,跟换节一个规矩。
+       *
+       * 早先这里只发 clock.set(只设比赛钟),进攻钟原样留着 ——
+       * 比赛钟拉满到 10:00、进攻钟却还剩 16 秒在走,两个钟对不上,
+       * 现场看着就是出了事故。
+       */
+      m.clock = resetClock(m.clock, m.rules, m.status, now);
+      m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
+      log = '比赛钟与进攻钟已重置';
+      break;
+    }
     case 'clock.nextPeriod': {
       const next = m.clock.period + 1;
       // 先定状态再算标签:否则从「已结束」直接跳节,标签会沿用旧的 FINAL

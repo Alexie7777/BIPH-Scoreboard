@@ -124,7 +124,7 @@ export const zhCN = {
   'clock.prevPeriod': '上一节',
   'clock.nextPeriod': '下一节',
   'clock.reset': '重置',
-  'clock.reset.title': '重置回本节总时长(长按或二次确认)',
+  'clock.reset.title': '比赛钟回到本节总时长、进攻钟回到满值(两个钟都停着,按「开始比赛」一起走)',
 
   /* ------------------------------ 进攻钟面板 ------------------------------ */
   'shot.label': '进攻钟 · {n}s',
@@ -169,6 +169,7 @@ export const zhCN = {
   'toast.clock.paused': '比赛钟已暂停',
   'toast.clock.adjust': '比赛钟 {delta} 秒',
   'toast.clock.set': '比赛钟已重置',
+  'toast.clock.reset': '比赛钟与进攻钟已重置',
   'toast.clock.period': '已进入下一节',
   'toast.clock.periodBack': '已回到上一节',
   'toast.shot.started': '进攻钟已开始',
@@ -469,7 +470,8 @@ export const enUS: Record<MessageKey, string> = {
   'clock.prevPeriod': 'Prev Period',
   'clock.nextPeriod': 'Next Period',
   'clock.reset': 'Reset',
-  'clock.reset.title': "Reset to this period's full length (hold or tap twice)",
+  'clock.reset.title':
+    "Reset the game clock to this period's full length and the shot clock to full (both stopped — press Start to run them together)",
 
   /* ------------------------------ 进攻钟面板 ------------------------------ */
   'shot.label': 'Shot Clock · {n}s',
@@ -509,6 +511,7 @@ export const enUS: Record<MessageKey, string> = {
   'toast.clock.paused': 'Game clock paused',
   'toast.clock.adjust': 'Game clock {delta}s',
   'toast.clock.set': 'Game clock reset',
+  'toast.clock.reset': 'Game clock and shot clock reset',
   'toast.clock.period': 'Moved to the next period',
   'toast.clock.periodBack': 'Back to the previous period',
   'toast.shot.started': 'Shot clock started',

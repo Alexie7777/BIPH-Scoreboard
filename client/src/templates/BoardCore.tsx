@@ -137,8 +137,15 @@ export function BoardCore({
             title={t('board.clockTitle', { time: formatClock(clockRemainingMs) })}
           />
           {showShot ? (
+            /*
+             * 进攻钟区只放倒计时数字。
+             *
+             * 早先这里还画了一个固定的"24"(本场设定的进攻钟时长),
+             * 跟倒计时数字同字号同粗体并排放着,看着像数字的一部分
+             * ("2416"),现场没人认得出它是干什么的 —— 已经去掉。
+             * 规则值在管理台里看就够了,大屏只管走秒。
+             */
             <div className={shotLow ? 'shot-wrap low' : 'shot-wrap'}>
-              <span>{rules.shotClockSeconds}</span>
               <SevenSegment
                 value={formatSeconds(shotRemainingMs)}
                 height={86}

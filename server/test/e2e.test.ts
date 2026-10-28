@@ -955,3 +955,76 @@ describe('端到端:24 秒违例', () => {
     control.close();
   });
 });
+
+/* ============================================================================
+ * 端到端:控制台「重置」
+ *
+ * 现场踩过的坑:「重置」早先只重置比赛钟,进攻钟原样留着(还剩 16 秒、还在走),
+ * 两个钟对不上,看着像出了事故。
+ *
+ * 这组用例走真实 WS 通道,保证新命令真的能被服务端认下来(而不是只在纯函数里对)。
+ * ========================================================================== */
+
+describe('端到端:控制台「重置」', () => {
+  let matchId: string;
+  let controlToken: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${BASE}/api/matches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '重置测试',
+        homeName: '主队',
+        awayName: '客队',
+        rules: { periods: 4, periodMinutes: 10, shotClockSeconds: 24 },
+      }),
+    });
+    const created = (await res.json()) as { match: Match; operatorToken: string };
+    matchId = created.match.id;
+    controlToken = created.operatorToken;
+  }, 60_000);
+
+  it('按「重置」→ 大屏上两个钟都归位并停表', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 开球:两个钟一起走
+    control.send({ t: 'cmd', cmdId: 'r0', type: 'clock.toggle', payload: {} });
+    await until(() => display.match?.clock.running === true);
+    // 把进攻钟拨到 16 秒,模拟"打到一半"
+    control.send({ t: 'cmd', cmdId: 'r1', type: 'shot.set', payload: { ms: 16_000 } });
+    await until(() => display.match?.shotClock.remainingMs === 16_000);
+
+    // 重置
+    control.send({ t: 'cmd', cmdId: 'r2', type: 'clock.reset', payload: {} });
+    await until(
+      () =>
+        display.match?.clock.running === false &&
+        display.match?.shotClock.running === false &&
+        display.match?.shotClock.remainingMs === 24_000,
+    );
+    expect(display.match?.clock.remainingMs).toBe(600_000);
+    expect(display.match?.clock.running).toBe(false);
+    expect(display.match?.shotClock.remainingMs).toBe(24_000);
+    expect(display.match?.shotClock.running).toBe(false);
+
+    display.close();
+    control.close();
+  });
+
+  it('重置后按「开始比赛」→ 两个钟一起走,进攻钟是满的 24 秒', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'r3', type: 'clock.toggle', payload: {} });
+    await until(() => display.match?.clock.running === true);
+    expect(display.match?.shotClock.running).toBe(true);
+    expect(display.match?.shotClock.remainingMs).toBe(24_000);
+
+    display.close();
+    control.close();
+  });
+});

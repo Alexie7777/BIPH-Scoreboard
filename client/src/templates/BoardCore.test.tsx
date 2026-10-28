@@ -134,6 +134,29 @@ describe('大屏模板', () => {
 });
 
 /*
+ * 进攻钟区。
+ *
+ * 早先这里除了倒计时数字,还画了一个固定的"24"(本场设定的进攻钟时长),
+ * 跟数字并排、同字号同粗体 —— 看着像数字的一部分("2416"),
+ * 现场没人认得出它是干什么的。已经去掉,大屏只留倒计时。
+ */
+describe('进攻钟区', () => {
+  it('只画倒计时数字,不再画那个固定秒数', () => {
+    const html = render(makeMatch());
+    // 倒计时本身还在(读屏标签里带着秒数)
+    expect(html).toContain('aria-label="进攻钟 24"');
+    // 但没有任何元素的内容正好是 "24" —— 那个固定秒数已经没了
+    expect(html).not.toMatch(/>24<\//);
+  });
+
+  it('进攻钟关掉时,这一块整个不出现', () => {
+    const m = makeMatch({ rules: { ...DEFAULT_RULES, useShotClock: false } });
+    const html = render(m);
+    expect(html).not.toContain('shot-wrap');
+  });
+});
+
+/*
  * 开赛倒计时屏。
  *
  * 两种模式最后都落到这一屏,但写法不同:

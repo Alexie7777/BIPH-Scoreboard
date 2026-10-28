@@ -11,7 +11,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import type { Locale, Side } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { estimatedServerNow, getQr, readStoredTokens, writeStoredTokens } from '../lib/api';
-import { formatClock, formatSeconds, periodDurationMs, remainingMs } from '../lib/format';
+import { formatClock, formatSeconds, remainingMs } from '../lib/format';
 import { useMatch } from '../lib/useMatch';
 import { useTicker } from '../lib/useTicker';
 import { useWakeLock } from '../lib/useWakeLock';
@@ -432,7 +432,7 @@ export default function Control() {
               periodLabel={match.clock.periodLabel}
               onToggle={() => doSend('clock.toggle')}
               onAdjust={(sec) => doSend('clock.adjust', { deltaMs: sec * 1000 })}
-              onReset={() => doSend('clock.set', { ms: periodDurationMs(rules) })}
+              onReset={() => doSend('clock.reset')}
               onNextPeriod={() => doSend('clock.nextPeriod')}
               onPrevPeriod={() => doSend('clock.prevPeriod')}
             />
