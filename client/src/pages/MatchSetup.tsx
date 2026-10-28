@@ -29,8 +29,9 @@ import { describeContrast } from '../lib/colors';
 import { formatStartCountdownInput, parseStartCountdown, resolveStartMode } from '../lib/format';
 import { formatClockTime, setScopedLocale, useI18n } from '../i18n';
 import { AdminKeyPrompt } from '../components/AdminKeyPrompt';
+import { CountdownPicker } from '../components/CountdownPicker';
 import { LanguageToggle } from '../components/LanguageToggle';
-import { IconCopy, IconExternal } from '../components/icons';
+import { IconClock, IconCopy, IconExternal } from '../components/icons';
 
 function normalizeHex(value: string, fallback: string): string {
   const v = value.trim();
@@ -248,6 +249,10 @@ export default function MatchSetup() {
   const [cdText, setCdText] = useState('');
   /** 倒计时输入的即时错误(格式不对) */
   const [cdError, setCdError] = useState<string | null>(null);
+  /** 倒计时选择器面板是否展开 */
+  const [cdPickerOpen, setCdPickerOpen] = useState(false);
+  /** 选择器面板的定位参照(点外面要收起来) */
+  const cdPickerWrapRef = useRef<HTMLDivElement | null>(null);
 
   const matchId = id ?? '';
 
@@ -471,16 +476,31 @@ export default function MatchSetup() {
     void armCountdown(ms);
   }
 
-  /** 强行用输入框里的值重新起算(哪怕跟现在一模一样) */
-  function rearmCountdown() {
-    const ms = parseStartCountdown(cdText.trim());
-    if (ms === null) {
-      setCdError(t('setup.info.startCountdown.invalid'));
-      return;
-    }
+  /**
+   * 选择器里选好了:填进输入框并**立刻起算**。
+   *
+   * 选一次就是一次明确的动作,不用再点一次「保存」——
+   * 站在场边的人只想说"还有 15 分钟",不想再找那个保存按钮。
+   *
+   * 选择器里的「重新起算」走的是同一条路:把当前值原样再交一次,
+   * 等于用同一个时长重新起算(比赛推迟了、想重新倒数一遍时用)。
+   */
+  function applyPickedDuration(ms: number) {
+    setCdText(formatStartCountdownInput(ms));
     setCdError(null);
     void armCountdown(ms);
   }
+
+  /** 点面板外面就把选择器收起来(原生时间选择器也是这个脾气) */
+  useEffect(() => {
+    if (!cdPickerOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const wrap = cdPickerWrapRef.current;
+      if (wrap && !wrap.contains(e.target as Node)) setCdPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [cdPickerOpen]);
 
   /** 有没有还没保存到服务端的修改 */
   const dirty = useMemo(
@@ -751,8 +771,14 @@ export default function MatchSetup() {
                 <input id="m-court" value={draft.court} onChange={(e) => setDraft({ ...draft, court: e.target.value })} />
               </div>
               <div className="field">
-                <label htmlFor="m-start-mode">{t('setup.info.startMode')}</label>
-                <div className="mode-toggle" role="group" aria-label={t('setup.info.startMode')}>
+                <span className="field-label" id="m-start-mode-label">
+                  {t('setup.info.startMode')}
+                </span>
+                <div
+                  className="mode-toggle"
+                  role="group"
+                  aria-labelledby="m-start-mode-label"
+                >
                   <button
                     type="button"
                     className={startMode === 'scheduled' ? 'on' : ''}
@@ -782,38 +808,58 @@ export default function MatchSetup() {
                     onChange={(e) => setDraft({ ...draft, startTime: e.target.value || null })}
                   />
                   <small className="field-hint">{t('setup.info.startTime.hint')}</small>
+                  <small className="field-hint">{t('setup.info.startTime.note')}</small>
                 </div>
               ) : (
                 <div className="field">
                   <label htmlFor="m-start-countdown">{t('setup.info.startCountdown')}</label>
-                  <div className="inline-row">
-                    <input
-                      id="m-start-countdown"
-                      className="cd-input"
-                      inputMode="numeric"
-                      autoComplete="off"
-                      placeholder="15:00"
-                      value={cdText}
-                      onChange={(e) => {
-                        setCdText(e.target.value);
-                        setCdError(null);
-                      }}
-                      onBlur={applyCountdownText}
-                    />
-                    <button type="button" className="btn small" onClick={rearmCountdown}>
-                      {t('setup.info.startCountdown.rearm')}
-                    </button>
+                  {/*
+                    输入框 + 右侧的时钟按钮 = 准点模式那个原生时间选择器的对等物。
+                    框里是文字,框右边点一下弹出选择面板(常用时长一键选 / 精确到秒)。
+                  */}
+                  <div className="picker-wrap" ref={cdPickerWrapRef}>
+                    <div className="input-group">
+                      <input
+                        id="m-start-countdown"
+                        className="cd-input"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="15:00"
+                        value={cdText}
+                        onChange={(e) => {
+                          setCdText(e.target.value);
+                          setCdError(null);
+                        }}
+                        onBlur={applyCountdownText}
+                      />
+                      <button
+                        type="button"
+                        className="suffix-btn"
+                        aria-label={t('setup.info.startCountdown.picker')}
+                        title={t('setup.info.startCountdown.picker')}
+                        onClick={() => setCdPickerOpen((v) => !v)}
+                      >
+                        <IconClock size={18} />
+                      </button>
+                    </div>
+                    {cdPickerOpen ? (
+                      <CountdownPicker
+                        value={armedCountdownMs}
+                        onPick={applyPickedDuration}
+                        onClose={() => setCdPickerOpen(false)}
+                      />
+                    ) : null}
                   </div>
                   {cdError ? (
                     <small className="field-hint err">{cdError}</small>
-                  ) : armedCountdownMs !== null ? (
-                    <small className="field-hint">
-                      {t('setup.info.startCountdown.armed', {
-                        time: formatStartCountdownInput(armedCountdownMs),
-                      })}
-                    </small>
                   ) : (
-                    <small className="field-hint">{t('setup.info.startCountdown.hint')}</small>
+                    <small className="field-hint">
+                      {armedCountdownMs !== null
+                        ? t('setup.info.startCountdown.armed', {
+                            time: formatStartCountdownInput(armedCountdownMs),
+                          })
+                        : t('setup.info.startCountdown.hint')}
+                    </small>
                   )}
                   <small className="field-hint">{t('setup.info.startCountdown.note')}</small>
                 </div>

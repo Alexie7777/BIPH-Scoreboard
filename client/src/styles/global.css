@@ -26,6 +26,15 @@
   --radius: 12px;
   --radius-lg: 18px;
 
+  /*
+   * 表单控件统一高度。
+   *
+   * 准点模式的时间输入框、倒计时模式的输入组、模式切换按钮,
+   * 三者必须一样高 —— 否则同一行里两个字段高低不齐,看着像没对齐。
+   * 47px 是输入框按 16px 字号算出来的自然高度。
+   */
+  --field-h: 47px;
+
   /* 大屏画布缩放变量(由 Display 页写入) */
   --scale: 1;
   --scale-x: 1;
@@ -81,6 +90,18 @@ textarea {
   border-radius: 10px;
   padding: 10px 12px;
   width: 100%;
+}
+
+/*
+ * 表单控件统一高度(--field-h)。
+ *
+ * 只作用于配置页的普通输入框:颜色选择器有自己的一套(44px),
+ * 输入组里的输入框要跟着外框走,不能单独定高。
+ */
+.field > input:not([type='color']),
+.field > select,
+.field > textarea {
+  height: var(--field-h);
 }
 
 input:focus,
@@ -397,17 +418,17 @@ h4 {
   min-width: 0;
 }
 
-/* 倒计时输入框:只放 "15:00" 这种短文本,窄一点免得把整行撑开 */
+/* 倒计时输入框:只放 "15:00" 这种短文本 */
 .cd-input {
-  max-width: 140px;
   font-variant-numeric: tabular-nums;
 }
 
 /* 模式切换(准点 / 倒计时):两颗按钮做成一个整体 */
 .mode-toggle {
-  display: inline-flex;
+  display: flex;
   align-items: stretch;
-  align-self: flex-start;
+  align-self: stretch;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
   overflow: hidden;
@@ -415,12 +436,19 @@ h4 {
 }
 
 .mode-toggle button {
+  flex: 1 1 0;
+  min-width: 0;
+  /* 加上切换器自己的 1px 边框,正好等于一个输入框的高度 */
+  height: calc(var(--field-h) - 2px);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 0;
   background: transparent;
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  padding: 9px 14px;
+  padding: 0 10px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.15s, color 0.15s;
@@ -440,7 +468,159 @@ h4 {
   color: #0b0e14;
 }
 
-.field > label {
+/*
+ * 输入组:一个框,左边是输入框,右边挂一个动作。
+ *
+ * 倒计时模式用它装「文字输入 + 时钟按钮」——
+ * 框的宽高跟准点模式那个原生时间输入框完全一样,
+ * 时钟按钮就站在原生选择器图标该在的位置(框内最右)。
+ */
+.input-group {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  height: var(--field-h);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0e1420;
+  overflow: hidden;
+}
+
+.input-group input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.input-group input:focus {
+  outline: none;
+}
+
+.input-group:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.input-group .suffix-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  flex: 0 0 auto;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.input-group .suffix-btn:hover {
+  color: var(--text);
+  background: var(--panel);
+}
+
+/* 选择器面板的定位参照 */
+.picker-wrap {
+  position: relative;
+}
+
+/*
+ * 倒计时选择器。
+ *
+ * 准点模式有浏览器原生的"选时间"面板,倒计时模式这里补一个同脾气的:
+ * 贴着输入框弹出(不是全屏模态),常用时长一键选,精确到秒用数字微调器。
+ */
+.cd-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 60;
+  width: 300px;
+  max-width: 78vw;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cd-picker-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cd-picker-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.cd-picker-preview {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.cd-picker-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cd-chip {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.cd-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.cd-picker-exact {
+  display: flex;
+  gap: 10px;
+}
+
+.cd-picker-exact label {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.cd-picker-exact input {
+  height: 38px;
+}
+
+.cd-picker-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cd-picker-actions .spacer {
+  flex: 1 1 auto;
+}
+
+.field > label,
+.field > .field-label {
   font-size: 13px;
   color: var(--text-dim);
   font-weight: 600;

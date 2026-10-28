@@ -249,6 +249,7 @@ export const zhCN = {
   'setup.info.court': '场地号',
   'setup.info.startTime': '开赛时间',
   'setup.info.startTime.hint': '填好后,大屏会在开赛前 3 分钟开始倒计时;留空则不显示',
+  'setup.info.startTime.note': '到点后倒计时消失,大屏回到待机屏',
   /* --- 开赛模式:准点 / 倒计时 --- */
   'setup.info.startMode': '开赛模式',
   'setup.info.startMode.hint': '准点模式按赛程表上的几点开球;倒计时模式直接填「还剩多久」',
@@ -260,6 +261,14 @@ export const zhCN = {
   'setup.info.startCountdown.invalid': '剩余时间格式应为 分:秒(例如 15:00)',
   'setup.info.startCountdown.note': '归零后大屏停在「开赛」,比赛钟仍由你按「开始」开表',
   'setup.info.startCountdown.armed': '已设定 {time},从设定那一刻开始倒数',
+  /* --- 倒计时选择器(准点模式原生时间选择器的对等物) --- */
+  'setup.info.startCountdown.picker': '选择剩余时间',
+  'setup.info.startCountdown.preview': '大屏将显示 距开赛 {time}',
+  'setup.info.startCountdown.previewEmpty': '请选择大于 0 的时长',
+  'setup.info.startCountdown.min': '分',
+  'setup.info.startCountdown.minutes': '分钟',
+  'setup.info.startCountdown.seconds': '秒',
+  'setup.info.startCountdown.apply': '确定',
   'setup.rules.title': '规则参数',
   'setup.rules.hint': '所有参数均可按本次比赛覆盖,不必改代码。',
   'setup.rules.periods': '节数',
@@ -582,6 +591,7 @@ export const enUS: Record<MessageKey, string> = {
   'setup.info.court': 'Court',
   'setup.info.startTime': 'Tip-off time',
   'setup.info.startTime.hint': 'When set, the big screen counts down in the last 3 minutes; leave empty to hide it',
+  'setup.info.startTime.note': 'At tip-off the countdown disappears and the big screen goes back to standby',
   /* --- Start mode: scheduled / countdown --- */
   'setup.info.startMode': 'Start mode',
   'setup.info.startMode.hint':
@@ -596,6 +606,14 @@ export const enUS: Record<MessageKey, string> = {
   'setup.info.startCountdown.note':
     'At zero the big screen stays on Tip-off; the game clock still starts when you press Start',
   'setup.info.startCountdown.armed': 'Set to {time}, counting down since it was armed',
+  /* --- Countdown picker (the counterpart of the native time picker) --- */
+  'setup.info.startCountdown.picker': 'Pick the time remaining',
+  'setup.info.startCountdown.preview': 'The big screen will show {time} left',
+  'setup.info.startCountdown.previewEmpty': 'Pick a duration greater than zero',
+  'setup.info.startCountdown.min': 'min',
+  'setup.info.startCountdown.minutes': 'Minutes',
+  'setup.info.startCountdown.seconds': 'Seconds',
+  'setup.info.startCountdown.apply': 'Apply',
   'setup.rules.title': 'Rules',
   'setup.rules.hint': 'Every value can be overridden for this match — no code changes needed.',
   'setup.rules.periods': 'Periods',
