@@ -4,6 +4,15 @@
    ============================================================ */
 
 :root {
+  /*
+   * 让浏览器把原生控件也按深色画。
+   *
+   * 时间输入框里那个"选时间"的时钟图标、时间选择面板、下拉列表、滚动条 ——
+   * 这些都是浏览器画的,不声明 color-scheme 它们就是浅色/深色各按各的来,
+   * 深色页面上会出现一个白晃晃的选择面板、一个看不清的深色图标。
+   */
+  color-scheme: dark;
+
   --bg: #0b0e14;
   --bg-elev: #121826;
   --panel: #171d2b;
@@ -115,6 +124,47 @@ input[type="color"] {
   padding: 2px;
   height: 44px;
   cursor: pointer;
+}
+
+/*
+ * 原生时间输入框里那个"选时间"的时钟图标。
+ *
+ * 这个图标是浏览器自己画的,默认用深色(跟表单控件的默认配色一致),
+ * 放进深色主题的输入框里几乎看不见 —— 现场站在旁边都认不出那是个按钮。
+ *
+ * 根上声明了 `color-scheme: dark` 之后,浏览器会把这套原生控件
+ * (时钟图标、时间选择面板、下拉列表、滚动条)整体按深色画,
+ * 图标自然就变浅了 —— 比用 filter 反相这种取巧办法干净,
+ * 而且原生选择面板也跟着变成深色,不再白晃晃地糊在深色页面上。
+ *
+ * 少数浏览器(比如旧版 Safari)不认 color-scheme,
+ * 那就再兜一层:用 filter 反相一次,保证图标看得见。
+ */
+input[type='time']::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.62);
+  cursor: pointer;
+}
+
+input[type='time']::-webkit-calendar-picker-indicator:hover {
+  filter: invert(1) opacity(1);
+}
+
+/*
+ * 认得 color-scheme 的浏览器:浏览器已经把图标画成浅色了,
+ * 不要再反相(反两次又变回深色),只调透明度把它压到跟
+ * 倒计时模式那个自绘图标(--text-dim)一个色调 ——
+ * 两个时钟按钮站在同一行里,颜色必须一样,否则像坏了。
+ */
+@supports (color-scheme: dark) {
+  input[type='time']::-webkit-calendar-picker-indicator {
+    filter: none;
+    opacity: 0.62;
+  }
+
+  input[type='time']::-webkit-calendar-picker-indicator:hover {
+    filter: none;
+    opacity: 1;
+  }
 }
 
 a {
