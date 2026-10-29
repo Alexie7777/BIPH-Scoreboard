@@ -131,10 +131,13 @@ export const zhCN = {
   'shot.title': '进攻钟 {time}',
   'shot.reset': '重置 {n}s',
   'shot.reset.title': '重置回规则设定的进攻钟时长',
+  'shot.toggle.title': '开/停进攻钟。开表时如果比赛钟停着,两个钟一起走',
   'shot.resetStart': '重置并开表',
-  'shot.resetStart.title': '复位到 {n} 秒并直接开表(投篮命中、进攻权不变时用)',
+  'shot.resetStart.title':
+    '复位到 {n} 秒并直接开表(投篮命中、进攻权不变时用;比赛钟没在走时两个钟一起走)',
   'shot.reset14': '14s',
-  'shot.reset14.title': '复位到 14 秒并开表(抢到进攻篮板、进攻权不变时用)',
+  'shot.reset14.title':
+    '复位到 14 秒并开表(抢到进攻篮板、进攻权不变时用;比赛钟没在走时两个钟一起走)',
   'shot.violation': '24 秒违例',
   'shot.violation.title': '确认 24 秒违例:球权转给对方,进攻钟复位到 24 秒',
 
@@ -176,6 +179,7 @@ export const zhCN = {
   'toast.shot.paused': '进攻钟已暂停',
   'toast.shot.adjust': '进攻钟 {delta} 秒',
   'toast.shot.reset': '进攻钟已重置',
+  'toast.shot.resetStart': '进攻钟已重置并开表',
   'toast.score.add': '{team} +{points} 分',
   'toast.score.sub': '{team} -{points} 分',
   'toast.foul.add': '{team} +1 次犯规',
@@ -478,10 +482,14 @@ export const enUS: Record<MessageKey, string> = {
   'shot.title': 'Shot clock {time}',
   'shot.reset': 'Reset {n}s',
   'shot.reset.title': 'Reset to the configured shot clock length',
+  'shot.toggle.title':
+    'Start/stop the shot clock. If the game clock is stopped, both clocks start together',
   'shot.resetStart': 'Reset & start',
-  'shot.resetStart.title': 'Reset to {n}s and start right away (after a made shot, possession unchanged)',
+  'shot.resetStart.title':
+    'Reset to {n}s and start right away (after a made shot, possession unchanged; if the game clock is stopped, both clocks start together)',
   'shot.reset14': '14s',
-  'shot.reset14.title': 'Reset to 14s and start (after an offensive rebound, possession unchanged)',
+  'shot.reset14.title':
+    'Reset to 14s and start (after an offensive rebound, possession unchanged; if the game clock is stopped, both clocks start together)',
   'shot.violation': '24s violation',
   'shot.violation.title': 'Confirm a 24-second violation: possession goes to the other team, shot clock resets',
 
@@ -518,6 +526,7 @@ export const enUS: Record<MessageKey, string> = {
   'toast.shot.paused': 'Shot clock paused',
   'toast.shot.adjust': 'Shot clock {delta}s',
   'toast.shot.reset': 'Shot clock reset',
+  'toast.shot.resetStart': 'Shot clock reset and started',
   'toast.score.add': '{team} +{points}',
   'toast.score.sub': '{team} -{points}',
   'toast.foul.add': '{team} +1 foul',

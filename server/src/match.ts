@@ -37,7 +37,6 @@ import {
   startShotClock,
   startTimeoutAnchor,
   toggleClock,
-  toggleShotClock,
 } from './clock.js';
 
 /* ============================================================================
@@ -193,6 +192,32 @@ function followShotClock(m: Match, now: number, tipOff: boolean): void {
 }
 
 /**
+ * 开进攻钟 —— 并保证比赛钟也在走。
+ *
+ * 篮球里进攻钟数的是【比赛时间】:比赛钟停着的时候,场上没有时间在流逝,
+ * 进攻钟不可能自己在走。所以"开进攻钟"这件事必须连带把比赛钟带起来 ——
+ * 早先「重置并开表」只开进攻钟,于是出现"进攻钟在跑、比赛钟停着",
+ * 两个钟对不上,现场看着就是出了事故。
+ *
+ * 比赛钟本来就在跑时(现场最常见:投篮命中,比赛钟一直在走)这里什么都不做,
+ * 也**不重设它的锚点** —— 重设会让表"顿"一下,现场看得出来。
+ *
+ * 返回值告诉调用方这一下顺带做了什么:
+ *   - `started`:这次把比赛钟带起来了
+ *   - `tipOff` :带起来的同时是开球(原来 status 不是 live)—— 进攻钟要满表起步
+ */
+function ensureGameClockRunning(
+  m: Match,
+  now: number,
+): { started: boolean; tipOff: boolean } {
+  if (m.clock.running) return { started: false, tipOff: false };
+  const tipOff = m.status !== 'live';
+  m.clock = startClock(m.clock, now);
+  m.status = 'live';
+  return { started: true, tipOff };
+}
+
+/**
  * 只把【配置类】的队伍字段合并进来。
  *
  * score / fouls / timeouts 只能通过各自的计分命令改变 ——
@@ -319,18 +344,33 @@ export function applyCommand(
     }
 
     /* ---------------------------- 进攻时钟 ---------------------------- */
-    case 'shot.start':
-      m.shotClock = startShotClock(m.shotClock, now);
-      log = '进攻钟开始';
+    /*
+     * 进攻钟不能自己开:开进攻钟必须连带把比赛钟带起来(见 ensureGameClockRunning)。
+     * 早先这三个命令都只动进攻钟,于是"进攻钟在跑、比赛钟停着"是能按出来的状态。
+     */
+    case 'shot.start': {
+      const kick = ensureGameClockRunning(m, now);
+      if (kick.tipOff) followShotClock(m, now, true); // 开球:满 24 秒起步
+      else m.shotClock = startShotClock(m.shotClock, now);
+      log = kick.started ? '进攻钟开始(比赛钟同时开始)' : '进攻钟开始';
       break;
+    }
     case 'shot.pause':
       m.shotClock = pauseShotClock(m.shotClock, now);
       log = '进攻钟暂停';
       break;
-    case 'shot.toggle':
-      m.shotClock = toggleShotClock(m.shotClock, now);
-      log = m.shotClock.running ? '进攻钟开始' : '进攻钟暂停';
+    case 'shot.toggle': {
+      if (m.shotClock.running) {
+        m.shotClock = pauseShotClock(m.shotClock, now);
+        log = '进攻钟暂停';
+      } else {
+        const kick = ensureGameClockRunning(m, now);
+        if (kick.tipOff) followShotClock(m, now, true);
+        else m.shotClock = startShotClock(m.shotClock, now);
+        log = kick.started ? '进攻钟开始(比赛钟同时开始)' : '进攻钟开始';
+      }
       break;
+    }
     case 'shot.adjust': {
       const delta = Number(p.deltaMs ?? 0);
       m.shotClock = adjustShotClock(m.shotClock, delta, now);
@@ -347,8 +387,15 @@ export function applyCommand(
       const seconds = typeof p.seconds === 'number' ? p.seconds : m.rules.shotClockSeconds;
       // start=true → 复位完直接开表(投篮命中后最常用的一次点击)
       const start = p.start === true;
+      // 「重置并开表」= 两个钟一起走:比赛钟停着就把它带起来。
+      // (篮球里进攻钟数的是比赛时间,比赛钟停着的时候进攻钟不该自己在走)
+      const kick = start ? ensureGameClockRunning(m, now) : { started: false, tipOff: false };
       m.shotClock = resetShotClock(m.shotClock, { ...m.rules, shotClockSeconds: seconds }, now, start);
-      log = start ? `进攻钟重置 ${seconds}s 并开始` : `进攻钟重置 ${seconds}s`;
+      log = start
+        ? kick.started
+          ? `进攻钟重置 ${seconds}s 并开始(比赛钟同时开始)`
+          : `进攻钟重置 ${seconds}s 并开始`
+        : `进攻钟重置 ${seconds}s`;
       break;
     }
     /*

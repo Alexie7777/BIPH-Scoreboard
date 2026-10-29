@@ -128,6 +128,12 @@ describe('操作提示文案', () => {
     expect(text('shot.adjust', { deltaMs: -5_000 })).toBe('进攻钟 -5 秒');
   });
 
+  it('进攻钟「重置并开表」与「重置」提示不一样', () => {
+    // start=true = 「重置并开表」:这一下两个钟一起走,提示要说清楚
+    expect(text('shot.reset', { seconds: 24, start: true })).toBe('进攻钟已重置并开表');
+    expect(text('shot.reset', { seconds: 24 })).toBe('进攻钟已重置');
+  });
+
   it('进攻权为空时说"无"', () => {
     expect(text('possession.set', { side: 'home' })).toBe('进攻权:火箭队');
     expect(text('possession.set', { side: null })).toBe('进攻权:无');

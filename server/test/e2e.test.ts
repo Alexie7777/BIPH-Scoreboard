@@ -1027,4 +1027,25 @@ describe('端到端:控制台「重置」', () => {
     display.close();
     control.close();
   });
+
+  it('按「重置并开表」→ 比赛钟没在走时,两个钟一起走', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 先把比赛钟停住(暂停会把两个钟都停住)
+    control.send({ t: 'cmd', cmdId: 'r4', type: 'clock.pause', payload: {} });
+    await until(() => display.match?.clock.running === false);
+    expect(display.match?.shotClock.running).toBe(false);
+
+    // 「重置并开表」:进攻钟复位并开表,比赛钟也得跟着走 ——
+    // 篮球里进攻钟数的是比赛时间,比赛钟停着的时候进攻钟不该自己在走
+    control.send({ t: 'cmd', cmdId: 'r5', type: 'shot.reset', payload: { seconds: 24, start: true } });
+    await until(() => display.match?.shotClock.running === true);
+    expect(display.match?.clock.running).toBe(true);
+    expect(display.match?.shotClock.remainingMs).toBe(24_000);
+
+    display.close();
+    control.close();
+  });
 });

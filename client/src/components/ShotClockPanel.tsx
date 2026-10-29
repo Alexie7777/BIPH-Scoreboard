@@ -80,6 +80,7 @@ export function ShotClockPanel({
         style={{ minHeight: 64, fontSize: 22 }}
         onClick={onToggle}
         disabled={disabled}
+        title={t('shot.toggle.title')}
       >
         {running ? <IconPause size={26} /> : <IconPlay size={26} />}
         {running ? t('clock.pause') : t('clock.start')}

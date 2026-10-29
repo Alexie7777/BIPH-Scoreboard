@@ -634,6 +634,92 @@ describe('进攻钟命令', () => {
     expect(m.shotClock.running).toBe(true);
   });
 
+  /*
+   * 进攻钟不能自己开 —— 这组用例锁的是"两个钟一起走"这条规矩。
+   *
+   * 现场踩过的坑:「重置并开表」只开进攻钟,比赛钟停着 —— 于是大屏上
+   * 进攻钟在跑、比赛钟不走,两个钟对不上。
+   *
+   * 根子在于篮球里进攻钟数的是【比赛时间】:比赛钟停着的时候没有时间在流逝,
+   * 进攻钟不可能自己在走。所以开进攻钟必须连带把比赛钟带起来。
+   */
+  it('「重置并开表」时比赛钟没在走 → 两个钟一起走', () => {
+    let m = freshMatch();
+    // 比赛钟停着(暂停中),进攻钟也停着
+    m = applyCommand(m, 'clock.pause', {}, T0).match;
+    expect(m.clock.running).toBe(false);
+
+    const r = applyCommand(m, 'shot.reset', { seconds: 24, start: true }, T0 + 1000);
+    expect(r.match.shotClock.remainingMs).toBe(24_000);
+    expect(r.match.shotClock.running).toBe(true);
+    expect(r.match.clock.running).toBe(true);
+    expect(r.log).toContain('比赛钟同时开始');
+  });
+
+  it('「14s」也一样:比赛钟没在走时两个钟一起走', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.pause', {}, T0).match;
+
+    const r = applyCommand(m, 'shot.reset', { seconds: 14, start: true }, T0 + 1000);
+    expect(r.match.shotClock.remainingMs).toBe(14_000);
+    expect(r.match.shotClock.running).toBe(true);
+    expect(r.match.clock.running).toBe(true);
+  });
+
+  it('进攻钟自己的「开始」也一样带起比赛钟', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.pause', {}, T0).match;
+
+    const r = applyCommand(m, 'shot.start', {}, T0 + 1000);
+    expect(r.match.shotClock.running).toBe(true);
+    expect(r.match.clock.running).toBe(true);
+  });
+
+  it('进攻钟自己的「开始/暂停」切到开表方向,同样带起比赛钟', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.pause', {}, T0).match;
+    m = applyCommand(m, 'shot.pause', {}, T0 + 500).match;
+    expect(m.shotClock.running).toBe(false);
+
+    const r = applyCommand(m, 'shot.toggle', {}, T0 + 1000);
+    expect(r.match.shotClock.running).toBe(true);
+    expect(r.match.clock.running).toBe(true);
+  });
+
+  it('还没开赛时按「重置并开表」= 开球:比赛钟开始,比赛状态转为 live', () => {
+    const m = freshMatch();
+    expect(m.status).toBe('scheduled');
+
+    const r = applyCommand(m, 'shot.reset', { seconds: 24, start: true }, T0);
+    expect(r.match.status).toBe('live');
+    expect(r.match.clock.running).toBe(true);
+    expect(r.match.shotClock.running).toBe(true);
+    expect(r.match.shotClock.remainingMs).toBe(24_000);
+  });
+
+  it('比赛钟本来就在跑时,「重置并开表」不碰它的锚点(表不"顿"一下)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'shot.set', { ms: 5_000 }, T0 + 1000).match;
+    const before = m.clock.anchorServerTs;
+
+    m = applyCommand(m, 'shot.reset', { seconds: 24, start: true }, T0 + 2000).match;
+    expect(m.clock.anchorServerTs).toBe(before);
+    expect(m.clock.running).toBe(true);
+    expect(m.shotClock.remainingMs).toBe(24_000);
+    expect(m.shotClock.running).toBe(true);
+  });
+
+  it('「重置」(不带 start)不碰比赛钟 —— 它只复位,不开表', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.pause', {}, T0).match;
+
+    const r = applyCommand(m, 'shot.reset', { seconds: 24 }, T0 + 1000);
+    expect(r.match.shotClock.remainingMs).toBe(24_000);
+    expect(r.match.shotClock.running).toBe(false);
+    expect(r.match.clock.running).toBe(false);
+  });
+
   it('24 秒违例:球权转给对方 + 进攻钟复位 24 + 比赛钟停住', () => {
     let m = freshMatch();
     m = applyCommand(m, 'clock.start', {}, T0).match;

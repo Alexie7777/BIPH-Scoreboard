@@ -83,8 +83,10 @@ export function describeCommand(
     case 'shot.adjust':
       return { key: 'toast.shot.adjust', vars: { delta: signedSeconds(p.deltaMs) } };
     case 'shot.set':
-    case 'shot.reset':
       return { key: 'toast.shot.reset' };
+    case 'shot.reset':
+      // start=true = 「重置并开表」:这一下两个钟一起走
+      return { key: p.start === true ? 'toast.shot.resetStart' : 'toast.shot.reset' };
 
     /* ------------------------------- 比分 ------------------------------- */
     case 'score.add': {
