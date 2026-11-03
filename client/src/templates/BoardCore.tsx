@@ -8,9 +8,10 @@
  * 整块画布由 Display 页统一 scale。
  */
 import type { Match, StartMode } from '@biph/shared';
+import { isFootball } from '@biph/shared';
 import { cssVars } from '../lib/cssVars';
 import { readableAccent } from '../lib/colors';
-import { formatClock, formatSeconds } from '../lib/format';
+import { formatClock, formatSeconds, periodDurationMs } from '../lib/format';
 import { useI18n } from '../i18n';
 import { SevenSegment } from '../components/SevenSegment';
 import { IconChevron } from '../components/icons';
@@ -25,6 +26,14 @@ export interface BoardProps {
   timeoutRemainingMs: number;
   /** 本地推算的开赛倒计时剩余毫秒 */
   startRemainingMs: number;
+  /**
+   * 本地推算的补时剩余毫秒(足球;0 = 没有补时)。
+   *
+   * 补时走的是独立的第二个表 —— 主钟停在 45:00 不动,这块单独走。
+   */
+  addedTimeRemainingMs?: number;
+  /** 本地推算的中场倒计时剩余毫秒(足球) */
+  halftimeRemainingMs?: number;
   /**
    * 开赛倒计时屏该不该显示。
    *
@@ -52,6 +61,8 @@ export function BoardCore({
   shotRemainingMs,
   timeoutRemainingMs,
   startRemainingMs,
+  addedTimeRemainingMs = 0,
+  halftimeRemainingMs = 0,
   startVisible,
   startMode,
   offline,
@@ -64,10 +75,36 @@ export function BoardCore({
   const showSponsor = !!(presentation.sponsorName || presentation.sponsorText);
   const showShot = rules.useShotClock;
   const shotLow = shotRemainingMs > 0 && shotRemainingMs <= 5_000;
-  const clockLow = clockRemainingMs > 0 && clockRemainingMs <= 60_000;
+
+  /*
+   * 足球的表往上走(00:00 → 45:00),篮球的表倒着走(还剩多少)。
+   *
+   * 两种口径只在这里转换一次:
+   *   - 篮球:直接显示剩余;
+   *   - 足球:本节总时长 − 剩余 = 已经过去多少。
+   * 锚点模型两边一样(都存"剩余"),所以服务端与客户端永远算得一致。
+   */
+  const football = isFootball(match);
+  const clockTotal = periodDurationMs(rules);
+  const clockShown = football
+    ? Math.max(0, Math.min(clockTotal, clockTotal - clockRemainingMs))
+    : clockRemainingMs;
+  // 最后 1 分钟:倒着走是"剩余 ≤ 60s",正着走是"已用 ≥ 总长 − 60s"
+  const clockLow = football
+    ? clockShown > 0 && clockShown >= clockTotal - 60_000
+    : clockRemainingMs > 0 && clockRemainingMs <= 60_000;
   const clockColor = clockLow ? '#ff4d5e' : accent;
   const shotColor = shotLow ? '#ff4d5e' : accent;
   const isFinal = match.status === 'finished';
+
+  /*
+   * 补时与中场休息(足球)。
+   *
+   * 补时表只在还有补时的时候亮出来;归零之后服务端把它清掉,
+   * 这里也就跟着消失 —— 大屏上不会一直挂着一个 "+00:00"。
+   */
+  const showAddedTime = football && addedTimeRemainingMs > 0;
+  const inHalftime = football && !!match.halftime;
 
   const homeBonus = rules.bonusFouls > 0 && home.fouls >= rules.bonusFouls;
   const awayBonus = rules.bonusFouls > 0 && away.fouls >= rules.bonusFouls;
@@ -116,7 +153,7 @@ export function BoardCore({
           </div>
           <div className="t-score">{home.score}</div>
           <div className="t-poss">
-            {match.possession === 'home' ? (
+            {match.possession === 'home' && rules.showPossession !== false ? (
               <>
                 <IconChevron size={44} />
                 {t('board.possession')}
@@ -128,14 +165,30 @@ export function BoardCore({
         </div>
 
         <div className="board-center">
-          <div className="period">{match.clock.periodLabel || 'Q1'}</div>
+          <div className="period">{match.clock.periodLabel || (football ? '1H' : 'Q1')}</div>
           <SevenSegment
-            value={formatClock(clockRemainingMs)}
+            value={formatClock(clockShown)}
             height={190}
             color={clockColor}
             dimColor="rgba(255,255,255,0.08)"
-            title={t('board.clockTitle', { time: formatClock(clockRemainingMs) })}
+            title={t('board.clockTitle', { time: formatClock(clockShown) })}
           />
+          {/*
+            补时表(足球):主钟停在 45:00 不动,这块单独走。
+            "+" 号用文字画 —— 七段数码管只认数字与冒号。
+          */}
+          {showAddedTime ? (
+            <div className="added-wrap">
+              <span className="added-sign">+</span>
+              <SevenSegment
+                value={formatClock(addedTimeRemainingMs)}
+                height={64}
+                color={accent}
+                dimColor="rgba(255,255,255,0.08)"
+                title={t('board.addedTime.title', { time: formatClock(addedTimeRemainingMs) })}
+              />
+            </div>
+          ) : null}
           {showShot ? (
             /*
              * 进攻钟区只放倒计时数字。
@@ -165,7 +218,7 @@ export function BoardCore({
           </div>
           <div className="t-score">{away.score}</div>
           <div className="t-poss">
-            {match.possession === 'away' ? (
+            {match.possession === 'away' && rules.showPossession !== false ? (
               <>
                 <IconChevron size={44} />
                 {t('board.possession')}
@@ -214,7 +267,7 @@ export function BoardCore({
         {awayBonus ? <span className="badge bonus">BONUS · {away.shortName || away.name}</span> : null}
       </div>
 
-      {isFinal ? <div className="board-final">FINAL</div> : null}
+      {isFinal ? <div className="board-final">{match.clock.periodLabel || 'FINAL'}</div> : null}
 
       {/*
         开赛倒计时:开赛前 3 分钟铺满整个画面。
@@ -240,6 +293,32 @@ export function BoardCore({
             <div className="su-at">{t('board.startup.at', { time: match.startTime })}</div>
           ) : null}
           {match.court ? <div className="su-court">{match.court}</div> : null}
+        </div>
+      ) : null}
+
+      {/*
+        中场休息屏(足球):整屏显示中场倒计时。
+        与开赛倒计时一样放在画布内 —— 跟着 1920×1080 一起缩放,
+        投影仪和 LED 屏上一样大。
+
+        归零之后画面留着(显示 00:00 +「等计分员开表」)——
+        什么时候开下半场由计分员按,屏幕不替他做主。
+      */}
+      {inHalftime ? (
+        <div className="board-halftime">
+          <div className="hf-event">{title}</div>
+          <div className="hf-label">{t('board.halftime')}</div>
+          <SevenSegment
+            value={formatClock(halftimeRemainingMs)}
+            height={200}
+            color={accent}
+            dimColor="rgba(255,255,255,0.08)"
+            title={t('board.halftime.title', { time: formatClock(halftimeRemainingMs) })}
+          />
+          <div className="hf-hint">
+            {halftimeRemainingMs > 0 ? t('board.halftime.hint') : t('board.halftime.wait')}
+          </div>
+          {match.court ? <div className="hf-court">{match.court}</div> : null}
         </div>
       ) : null}
 

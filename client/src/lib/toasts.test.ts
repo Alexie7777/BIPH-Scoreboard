@@ -7,7 +7,7 @@
  *   3. 提示文案在两种语言下都拼得出来(占位符不缺、队伍名带对)。
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_RULES, type Match } from '@biph/shared';
+import { DEFAULT_RULES, defaultRulesFor, type Match } from '@biph/shared';
 import { describeCommand } from './toasts';
 import { translate } from '../i18n';
 
@@ -152,5 +152,49 @@ describe('操作提示文案', () => {
   it('没有比赛快照时也不会崩(退回空队伍名)', () => {
     expect(() => text('score.add', { side: 'home', points: 1 }, null)).not.toThrow();
     expect(text('score.add', { side: 'home', points: 1 }, null)).toBe(' +1 分');
+  });
+});
+
+/*
+ * 足球的提示。
+ *
+ * 补时/中场的提示要说清"设了多久""开表了还是暂停了" ——
+ * 计分员连点时,提示是他唯一的反馈。
+ */
+describe('足球的操作提示', () => {
+  function fbMatch(patch?: Partial<Match>): Match {
+    return makeMatch({
+      sport: 'football',
+      rules: { ...defaultRulesFor('football') },
+      ...patch,
+    });
+  }
+
+  it('设补时 / 开表 / 清除,三种提示各不相同', () => {
+    expect(text('addedTime.set', { seconds: 240 }, fbMatch())).toBe('补时已设为 +04:00');
+    expect(text('addedTime.set', { seconds: 240, start: true }, fbMatch())).toBe('补时 +04:00 已开始');
+    expect(text('addedTime.set', { seconds: 0 }, fbMatch())).toBe('补时已清除');
+  });
+
+  it('补时启停提示按【按下之前】的状态判断', () => {
+    const running = fbMatch({
+      addedTime: { running: true, remainingMs: 240_000, anchorServerTs: 0, durationMs: 240_000 },
+    });
+    expect(text('addedTime.toggle', {}, running)).toBe('补时已暂停');
+    expect(text('addedTime.toggle', {}, fbMatch())).toBe('补时 +00:00 已开始');
+  });
+
+  it('半场与中场的提示', () => {
+    expect(text('half.end', {}, fbMatch())).toBe('上半场已结束');
+    expect(text('halftime.start', {}, fbMatch())).toBe('中场休息已开始');
+    expect(text('halftime.end', {}, fbMatch())).toBe('已进入下半场');
+  });
+
+  it('中场倒计时启停提示按【按下之前】的状态判断', () => {
+    const running = fbMatch({
+      halftime: { running: true, remainingMs: 900_000, anchorServerTs: 0, durationMs: 900_000 },
+    });
+    expect(text('halftime.toggle', {}, running)).toBe('中场倒计时已暂停');
+    expect(text('halftime.toggle', {}, fbMatch())).toBe('中场倒计时已继续');
   });
 });

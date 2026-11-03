@@ -8,10 +8,10 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import type { Locale, Side } from '@biph/shared';
+import { isFootball, DEFAULT_HALFTIME_MINUTES, type Locale, type Side } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { estimatedServerNow, getQr, readStoredTokens, writeStoredTokens } from '../lib/api';
-import { formatClock, formatSeconds, remainingMs } from '../lib/format';
+import { formatClock, formatSeconds, periodDurationMs, remainingMs, resolveFootballPhase } from '../lib/format';
 import { useMatch } from '../lib/useMatch';
 import { useTicker } from '../lib/useTicker';
 import { useWakeLock } from '../lib/useWakeLock';
@@ -24,6 +24,7 @@ import {
 import { setScopedLocale, translateServerError, useI18n } from '../i18n';
 import { ClockPanel } from '../components/ClockPanel';
 import { ConfirmButton } from '../components/ConfirmButton';
+import { FootballPanel } from '../components/FootballPanel';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { OfflineBar } from '../components/OfflineBar';
 import { ServerClock } from '../components/ServerClock';
@@ -158,6 +159,10 @@ export default function Control() {
 
   const [clockMs, setClockMs] = useState(0);
   const [shotMs, setShotMs] = useState(0);
+  /** 补时剩余毫秒(足球) */
+  const [addedMs, setAddedMs] = useState(0);
+  /** 中场倒计时剩余毫秒(足球) */
+  const [halftimeMs, setHalftimeMs] = useState(0);
 
   /**
    * 墙钟(本地时间)。
@@ -205,6 +210,19 @@ export default function Control() {
     const s = remainingMs(m.shotClock, now);
     setClockMs((prev) => (formatClock(prev) !== formatClock(c) ? c : prev));
     setShotMs((prev) => (formatSeconds(prev) !== formatSeconds(s) ? s : prev));
+
+    /*
+     * 足球的两个额外表:补时与中场倒计时。
+     *
+     * 同样是锚点 + 本地推算 —— 断网时补时照样走秒,
+     * 计分员不用担心网络抖一下就丢了两分钟。
+     */
+    const at = m.addedTime;
+    const added = at ? remainingMs(at, now) : 0;
+    setAddedMs((prev) => (prev !== added ? added : prev));
+    const ht = m.halftime;
+    const half = ht ? remainingMs(ht, now) : 0;
+    setHalftimeMs((prev) => (prev !== half ? half : prev));
 
     /* ---- 暂停倒计时:最后 5 秒开始警示,归零时收尾 ---- */
     const anchor = m.timeout;
@@ -394,10 +412,15 @@ export default function Control() {
   }
 
   const { rules, home, away } = match;
-  const shotVisible = rules.useShotClock;
+  // 足球与篮球是两套控件:进攻钟、犯规、暂停在足球里一个都用不上。
+  const football = isFootball(match);
+  const shotVisible = rules.useShotClock && !football;
   // 暂停进行中:大屏上正跑着倒计时
   const timeoutRunning = !!match.timeout?.running;
   const timeoutSide = match.timeout?.side ?? null;
+  // 足球的阶段:上半场 / 中场休息 / 下半场
+  const phase = resolveFootballPhase({ period: match.clock.period, halftime: match.halftime });
+  const halfTotalMs = periodDurationMs(rules);
 
   return (
     <div className="control-shell">
@@ -430,6 +453,11 @@ export default function Control() {
               remainingMs={clockMs}
               running={match.clock.running}
               periodLabel={match.clock.periodLabel}
+              /* 足球的表往上走(00:00 → 45:00),篮球的表倒着走 */
+              countUp={football}
+              totalMs={halfTotalMs}
+              showPeriodNav={!football}
+              label={football ? t('football.clock.label', { period: match.clock.periodLabel }) : undefined}
               onToggle={() => doSend('clock.toggle')}
               onAdjust={(sec) => doSend('clock.adjust', { deltaMs: sec * 1000 })}
               onReset={() => doSend('clock.reset')}
@@ -453,6 +481,25 @@ export default function Control() {
                 onViolation={() => doSend('shot.violation')}
               />
             ) : null}
+
+            {football ? (
+              <FootballPanel
+                phase={phase}
+                addedTimeMs={addedMs}
+                addedTimeRunning={!!match.addedTime?.running}
+                addedTimeDurationMs={match.addedTime?.durationMs ?? 0}
+                halftimeMs={halftimeMs}
+                halftimeRunning={!!match.halftime?.running}
+                halftimeMinutes={rules.halftimeMinutes ?? DEFAULT_HALFTIME_MINUTES}
+                onHalfEnd={() => doSend('half.end')}
+                onAddedTimeSet={(seconds, start) => doSend('addedTime.set', { seconds, start })}
+                onAddedTimeToggle={() => doSend('addedTime.toggle')}
+                onHalftimeStart={() => doSend('halftime.start')}
+                onHalftimeToggle={() => doSend('halftime.toggle')}
+                onHalftimeEnd={() => doSend('halftime.end')}
+                onBackToFirstHalf={() => doSend('clock.prevPeriod')}
+              />
+            ) : null}
           </div>
 
           <div className="col-teams">
@@ -460,6 +507,9 @@ export default function Control() {
               team={home}
               rules={rules}
               hasPossession={match.possession === 'home'}
+              showFouls={!football}
+              showTimeouts={!football}
+              showMultiPoint={!football}
               onScore={(points) => doSend('score.add', { side: 'home', points })}
               onScoreSub={() => doSend('score.sub', { side: 'home', points: 1 })}
               onFoul={(delta) =>
@@ -477,6 +527,9 @@ export default function Control() {
               team={away}
               rules={rules}
               hasPossession={match.possession === 'away'}
+              showFouls={!football}
+              showTimeouts={!football}
+              showMultiPoint={!football}
               onScore={(points) => doSend('score.add', { side: 'away', points })}
               onScoreSub={() => doSend('score.sub', { side: 'away', points: 1 })}
               onFoul={(delta) =>
@@ -503,17 +556,20 @@ export default function Control() {
           </button>
         ) : null}
 
-        <button type="button" className="act" onClick={togglePossession} title={t('control.possession.title')}>
-          <IconSwap size={22} />
-          <span>{t('control.possession')}</span>
-          <span className="act-sub">
-            {match.possession === 'home'
-              ? t('control.possession.home')
-              : match.possession === 'away'
-                ? t('control.possession.away')
-                : t('control.possession.none')}
-          </span>
-        </button>
+        {/* 进攻权:篮球才有(足球没有球权标记这一说) */}
+        {football ? null : (
+          <button type="button" className="act" onClick={togglePossession} title={t('control.possession.title')}>
+            <IconSwap size={22} />
+            <span>{t('control.possession')}</span>
+            <span className="act-sub">
+              {match.possession === 'home'
+                ? t('control.possession.home')
+                : match.possession === 'away'
+                  ? t('control.possession.away')
+                  : t('control.possession.none')}
+            </span>
+          </button>
+        )}
 
         <button type="button" className="act" onClick={() => doSend('sides.swap')} title={t('control.swap.title')}>
           <IconSwap size={22} />

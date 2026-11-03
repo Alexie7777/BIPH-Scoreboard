@@ -12,7 +12,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_RULES, type Match } from '@biph/shared';
+import { DEFAULT_RULES, defaultRulesFor, type Match } from '@biph/shared';
 import { I18nProvider } from '../i18n';
 import { BoardCore, type BoardCoreProps } from './BoardCore';
 
@@ -191,5 +191,78 @@ describe('开赛倒计时屏', () => {
     const m = makeMatch({ status: 'scheduled' });
     const html = render(m, { startVisible: false, startRemainingMs: 0, startMode: 'countdown' });
     expect(html).not.toContain('board-startup');
+  });
+});
+
+/*
+ * 足球。
+ *
+ * 足球的表是【往上走】的(00:00 → 45:00),而锚点里存的还是"还剩多少",
+ * 所以显示值要在这一层换算:已用 = 本半场时长 − 剩余。
+ * 另外篮球专属的元素(进攻钟、犯规、暂停)一个都不该出现。
+ */
+describe('足球大屏', () => {
+  const FB_RULES = { ...defaultRulesFor('football') };
+  const HALF = 45 * 60_000;
+
+  function fbMatch(patch: Partial<Match> = {}): Match {
+    return makeMatch({
+      sport: 'football',
+      rules: { ...FB_RULES },
+      clock: { running: true, remainingMs: HALF - 600_000, anchorServerTs: 0, period: 1, periodLabel: '1H' },
+      ...patch,
+    });
+  }
+
+  it('比赛钟显示【已用时间】而不是剩余时间', () => {
+    // 剩余 35:00 → 已用 10:00
+    const html = render(fbMatch(), { clockRemainingMs: HALF - 600_000 });
+    expect(html).toContain('aria-label="比赛钟 10:00"');
+  });
+
+  it('满表停着时显示 00:00', () => {
+    const html = render(fbMatch(), { clockRemainingMs: HALF });
+    expect(html).toContain('aria-label="比赛钟 00:00"');
+  });
+
+  it('篮球专属的元素一个都不出现(进攻钟/犯规/暂停)', () => {
+    const html = render(fbMatch(), { shotRemainingMs: 24_000 });
+    expect(html).not.toContain('shot-wrap');
+    expect(html).not.toContain('犯规');
+    expect(html).not.toContain('暂停');
+  });
+
+  it('有补时:单独一行显示 +MM:SS', () => {
+    const html = render(fbMatch(), { addedTimeRemainingMs: 240_000 });
+    expect(html).toContain('added-wrap');
+    expect(html).toContain('added-sign');
+    expect(html).toContain('aria-label="补时 04:00"');
+  });
+
+  it('没有补时:那一行整个不出现', () => {
+    const html = render(fbMatch(), { addedTimeRemainingMs: 0 });
+    expect(html).not.toContain('added-wrap');
+  });
+
+  it('处于中场休息:整屏显示中场倒计时', () => {
+    const m = fbMatch({
+      halftime: { running: true, remainingMs: 900_000, anchorServerTs: 0, durationMs: 900_000 },
+      clock: { running: false, remainingMs: 0, anchorServerTs: 0, period: 1, periodLabel: 'HT' },
+    });
+    const html = render(m, { halftimeRemainingMs: 900_000 });
+    expect(html).toContain('board-halftime');
+    expect(html).toContain('中场休息');
+    expect(html).toContain('aria-label="中场休息 15:00"');
+  });
+
+  it('不在中场休息:中场屏不出现', () => {
+    const html = render(fbMatch(), { halftimeRemainingMs: 0 });
+    expect(html).not.toContain('board-halftime');
+  });
+
+  it('样式表里有补时与中场屏的类名(组件与样式不能脱节)', () => {
+    const css = readFileSync(path.join(HERE, '../styles/global.css'), 'utf8');
+    expect(css).toContain('.board-center .added-wrap');
+    expect(css).toContain('.board-halftime');
   });
 });

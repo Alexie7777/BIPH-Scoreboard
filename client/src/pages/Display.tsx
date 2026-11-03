@@ -40,6 +40,10 @@ export default function Display() {
   const [timeoutMs, setTimeoutMs] = useState(0);
   /** 开赛倒计时剩余毫秒(0 = 现在不显示) */
   const [startMs, setStartMs] = useState(0);
+  /** 补时剩余毫秒(足球) */
+  const [addedMs, setAddedMs] = useState(0);
+  /** 中场倒计时剩余毫秒(足球) */
+  const [halftimeMs, setHalftimeMs] = useState(0);
   /** 开赛倒计时屏该不该显示(倒计时模式归零后仍然是 true) */
   const [startOn, setStartOn] = useState(false);
   /** 开赛模式:准点(墙钟)还是倒计时(相对时长) */
@@ -93,6 +97,8 @@ export default function Display() {
 
   const prevClockRef = useRef<number | null>(null);
   const prevShotRef = useRef<number | null>(null);
+  const prevAddedRef = useRef<number | null>(null);
+  const prevHalftimeRef = useRef<number | null>(null);
 
   /* ------------------------------------------------------ 缩放:写入 CSS 变量 */
   useEffect(() => {
@@ -155,12 +161,37 @@ export default function Display() {
     }
     prevShotRef.current = s;
 
+    /*
+     * 足球的两个额外表。
+     *
+     * 同样是锚点本地推算,断网时照样走秒。
+     * 归零各鸣一声:补时走完 = 裁判的哨子(然后自动进中场休息),
+     * 中场走完 = 中场结束(但**不自动开下半场**)。
+     */
+    const at = m.addedTime;
+    const added = at ? remainingMs(at, now) : 0;
+    const pa = prevAddedRef.current;
+    if (pa !== null && pa > 0 && added <= 0 && soundOn) {
+      buzzerRef.current?.buzz('short');
+    }
+    prevAddedRef.current = added;
+
+    const ht = m.halftime;
+    const half = ht ? remainingMs(ht, now) : 0;
+    const ph = prevHalftimeRef.current;
+    if (ph !== null && ph > 0 && half <= 0 && soundOn) {
+      buzzerRef.current?.buzz('short');
+    }
+    prevHalftimeRef.current = half;
+
     setClockMs((prev) => (formatClock(prev) !== formatClock(c) ? c : prev));
     setShotMs((prev) => (formatSeconds(prev) !== formatSeconds(s) ? s : prev));
     setTimeoutMs((prev) => (prev !== to ? to : prev));
     setStartMs((prev) => (prev !== st ? st : prev));
     setStartOn((prev) => (prev !== (sd.kind === 'countdown') ? sd.kind === 'countdown' : prev));
     setStartMode((prev) => (prev !== sd.mode ? sd.mode : prev));
+    setAddedMs((prev) => (prev !== added ? added : prev));
+    setHalftimeMs((prev) => (prev !== half ? half : prev));
   });
 
   /* ------------------------------------------------------ 全屏快捷键 */
@@ -195,6 +226,8 @@ export default function Display() {
       shotRemainingMs: shotMs,
       timeoutRemainingMs: timeoutMs,
       startRemainingMs: startMs,
+      addedTimeRemainingMs: addedMs,
+      halftimeRemainingMs: halftimeMs,
       startVisible: startOn,
       startMode,
       offline,
@@ -203,7 +236,7 @@ export default function Display() {
     if (template === 'led') return <LedBoard {...props} />;
     if (template === 'broadcast') return <BroadcastBoard {...props} />;
     return <SimpleBoard {...props} />;
-  }, [match, clockMs, shotMs, timeoutMs, startMs, startOn, startMode, offline, stretch, template]);
+  }, [match, clockMs, shotMs, timeoutMs, startMs, addedMs, halftimeMs, startOn, startMode, offline, stretch, template]);
 
   /*
    * 待机层:还没开赛时铺满整个大屏。

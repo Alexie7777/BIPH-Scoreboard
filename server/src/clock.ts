@@ -2,10 +2,13 @@ import {
   buildPeriodLabel,
   periodDurationMs,
   remainingMs as sharedRemaining,
+  type AddedTimeAnchor,
   type ClockAnchor,
+  type HalftimeAnchor,
   type MatchRules,
   type MatchStatus,
   type Side,
+  type SportId,
   type TimeAnchor,
   type TimeoutAnchor,
 } from '@biph/shared';
@@ -52,6 +55,17 @@ export interface AnchorInit {
   period: number;
   periodLabel: string;
   now: number;
+}
+
+/**
+ * 节次标签的额外上下文。
+ *
+ * 篮球的标签只由 (period, periods, status) 决定;足球还要知道
+ * 「是不是处于中场休息」—— 那是 HT,不是 1H/2H。
+ */
+export interface LabelOptions {
+  sport?: SportId | null;
+  halftime?: boolean;
 }
 
 export function createAnchor(init: AnchorInit): ClockAnchor {
@@ -129,12 +143,13 @@ export function resetClock(
   rules: MatchRules,
   status: MatchStatus,
   now: number,
+  opts?: LabelOptions,
 ): ClockAnchor {
   return createAnchor({
     remainingMs: periodDurationMs(rules),
     running: false,
     period: anchor.period,
-    periodLabel: buildPeriodLabel(anchor.period, rules.periods, status),
+    periodLabel: buildPeriodLabel(anchor.period, rules.periods, status, opts),
     now,
   });
 }
@@ -149,13 +164,14 @@ export function setPeriod(
   rules: MatchRules,
   status: MatchStatus,
   now: number,
+  opts?: LabelOptions,
 ): ClockAnchor {
   const p = Math.max(1, period);
   return createAnchor({
     remainingMs: periodDurationMs(rules),
     running: false,
     period: p,
-    periodLabel: buildPeriodLabel(p, rules.periods, status),
+    periodLabel: buildPeriodLabel(p, rules.periods, status, opts),
     now,
   });
 }
@@ -254,4 +270,102 @@ export function endTimeoutAnchor(): TimeoutAnchor {
 /** 暂停倒计时在 now 时刻的剩余毫秒 */
 export function currentTimeoutRemaining(anchor: TimeoutAnchor, now: number): number {
   return sharedRemaining(anchor, now);
+}
+
+/* --------------------------- 足球:补时 / 中场 ---------------------------
+ * 足球有两个额外的表:
+ *   - 补时表:主钟 45:00 停表后,裁判宣布的伤停补时走这张表;
+ *   - 中场倒计时:中场休息 15 分钟。
+ * 两者和比赛钟一样是【锚点】—— 服务端只广播锚点,客户端本地推算,断网也走秒。
+ * ------------------------------------------------------------------- */
+
+/** 设补时(seconds 秒),start=true 时设完直接开表 */
+export function setAddedTime(seconds: number, now: number, start = false): AddedTimeAnchor {
+  const durationMs = Math.max(0, Math.round(seconds * 1000));
+  return {
+    running: start && durationMs > 0,
+    remainingMs: durationMs,
+    anchorServerTs: now,
+    durationMs,
+  };
+}
+
+/** 补时开表(冻结当前剩余后继续走) */
+export function startAddedTime(anchor: AddedTimeAnchor, now: number): AddedTimeAnchor {
+  if (anchor.running) return anchor;
+  return {
+    running: true,
+    remainingMs: currentRemaining(anchor, now),
+    anchorServerTs: now,
+    durationMs: anchor.durationMs,
+  };
+}
+
+/** 补时停表 */
+export function pauseAddedTime(anchor: AddedTimeAnchor, now: number): AddedTimeAnchor {
+  if (!anchor.running) return anchor;
+  return {
+    running: false,
+    remainingMs: currentRemaining(anchor, now),
+    anchorServerTs: now,
+    durationMs: anchor.durationMs,
+  };
+}
+
+/** 补时启停切换 */
+export function toggleAddedTime(anchor: AddedTimeAnchor, now: number): AddedTimeAnchor {
+  return anchor.running ? pauseAddedTime(anchor, now) : startAddedTime(anchor, now);
+}
+
+/** 进入中场休息(durationMs 总时长),倒计时停着等计分员开表 */
+export function enterHalftime(durationMs: number, now: number): HalftimeAnchor {
+  const total = Math.max(0, Math.round(durationMs));
+  return {
+    running: false,
+    remainingMs: total,
+    anchorServerTs: now,
+    durationMs: total,
+  };
+}
+
+/** 中场倒计时开表 */
+export function startHalftime(anchor: HalftimeAnchor, now: number): HalftimeAnchor {
+  if (anchor.running) return anchor;
+  return {
+    running: true,
+    remainingMs: currentRemaining(anchor, now),
+    anchorServerTs: now,
+    durationMs: anchor.durationMs,
+  };
+}
+
+/** 中场倒计时停表 */
+export function pauseHalftime(anchor: HalftimeAnchor, now: number): HalftimeAnchor {
+  if (!anchor.running) return anchor;
+  return {
+    running: false,
+    remainingMs: currentRemaining(anchor, now),
+    anchorServerTs: now,
+    durationMs: anchor.durationMs,
+  };
+}
+
+/** 中场倒计时启停切换 */
+export function toggleHalftime(anchor: HalftimeAnchor, now: number): HalftimeAnchor {
+  return anchor.running ? pauseHalftime(anchor, now) : startHalftime(anchor, now);
+}
+
+/**
+ * 中场倒计时重新计时。
+ *
+ * 归零之后计分员再按一次「开始中场休息」= 中场延时,重新走满全场时长。
+ */
+export function rearmHalftime(anchor: HalftimeAnchor, now: number): HalftimeAnchor {
+  const total = Math.max(0, Math.round(anchor.durationMs));
+  return {
+    running: true,
+    remainingMs: total,
+    anchorServerTs: now,
+    durationMs: total,
+  };
 }

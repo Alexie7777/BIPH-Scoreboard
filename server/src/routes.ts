@@ -4,8 +4,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import QRCode from 'qrcode';
 import {
   MAX_START_COUNTDOWN_MS,
+  buildPeriodLabel,
+  defaultRulesFor,
   isLocale,
+  isSportId,
   isValidStartMode,
+  resolveSport,
   isValidStartTime,
   parseRole,
   type CreateMatchRequest,
@@ -65,7 +69,9 @@ function withLang(url: string, locale: string | null | undefined): string {
  * 必须能只发这一个字段,否则用户在队名框里敲到一半,一个开关就会把半截队名推到现场大屏。
  * 队伍字段由 mergeTeamConfig 合并(比分/犯规/暂停一律不许带)。
  */
-type ConfigPatch = Partial<Omit<Match, 'rules' | 'presentation' | 'home' | 'away' | 'startCountdown'>> & {
+type ConfigPatch = Partial<
+  Omit<Match, 'rules' | 'presentation' | 'home' | 'away' | 'startCountdown' | 'addedTime' | 'halftime'>
+> & {
   rules?: Partial<Match['rules']>;
   presentation?: Partial<Match['presentation']>;
   home?: Partial<Team>;
@@ -218,6 +224,16 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
       const { startCountdownMs: _staleCountdown, ...currentClean } = current as Match & {
         startCountdownMs?: number | null;
       };
+      /*
+       * 换项目 → 规则跟着换成新项目的默认(足球 2×45,不是篮球 4×10),
+       * 再让这次明确传过来的部分盖上去。
+       */
+      const currentSport = resolveSport(current);
+      const nextSport = isSportId(patch.sport) ? patch.sport : currentSport;
+      const nextRules =
+        nextSport !== currentSport
+          ? { ...defaultRulesFor(nextSport), ...(patch.rules ?? {}) }
+          : { ...current.rules, ...(patch.rules ?? {}) };
       const next: Match = {
         ...currentClean,
         ...rest,
@@ -225,10 +241,10 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         // 比分与犯规暂停必须走命令通道,否则锚点语义与撤销栈会全部对不上
         home: mergeTeamConfig(current.home, patch.home ?? {}),
         away: mergeTeamConfig(current.away, patch.away ?? {}),
-        rules: { ...current.rules, ...(patch.rules ?? {}) },
+        rules: nextRules,
         presentation: { ...current.presentation, ...(patch.presentation ?? {}) },
         // 运动项目只认已登记的值,其余一律沿用当前值
-        sport: patch.sport === 'basketball' ? 'basketball' : current.sport,
+        sport: nextSport,
         // 计划开赛时间:null = 清空(不显示开赛倒计时);字符串 = 覆盖;没给这个字段 = 保持原值
         startTime:
           patch.startTime === null
@@ -250,10 +266,22 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
               : current.startCountdown ?? null,
         // 时钟与比分必须走命令通道(保证锚点语义正确),这里一律沿用当前值
         id: current.id,
-        clock: current.clock,
-        shotClock: current.shotClock,
+        clock: {
+          ...current.clock,
+          // 换了项目/规则,节次标签要跟着重算(篮球 Q1 → 足球 1H)
+          periodLabel: buildPeriodLabel(current.clock.period, nextRules.periods, current.status, {
+            sport: nextSport,
+            halftime: !!current.halftime,
+          }),
+        },
+        // 换成足球就没有进攻钟了,顺手把它停住(不然会留着一个还在跑的表)
+        shotClock:
+          nextSport !== currentSport ? { ...current.shotClock, running: false } : current.shotClock,
         // 暂停倒计时同样只认命令通道(timeout.request / timeout.end)
         timeout: current.timeout,
+        // 足球的补时与中场休息也只认命令通道
+        addedTime: current.addedTime ?? null,
+        halftime: current.halftime ?? null,
         possession: current.possession,
         status: current.status,
         seq: current.seq,

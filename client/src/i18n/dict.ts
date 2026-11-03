@@ -46,6 +46,7 @@ export const zhCN = {
 
   /* ------------------------------ 运动项目 ------------------------------ */
   'sport.basketball': '篮球',
+  'sport.football': '足球',
 
   /* ------------------------------ 管理台 ------------------------------ */
   'dashboard.health.ok': '服务正常',
@@ -64,6 +65,7 @@ export const zhCN = {
   'dashboard.openDisplay': '打开大屏',
   'dashboard.matchConfig': '比赛配置',
   'dashboard.create.title': '新建比赛',
+  'dashboard.create.sport': '运动项目',
   'dashboard.create.home': '主队名',
   'dashboard.create.away': '客队名',
   'dashboard.create.court': '场地号',
@@ -141,6 +143,34 @@ export const zhCN = {
   'shot.violation': '24 秒违例',
   'shot.violation.title': '确认 24 秒违例:球权转给对方,进攻钟复位到 24 秒',
 
+  /* ------------------------------ 足球面板 ------------------------------ */
+  'football.label': '足球 · 补时与中场',
+  'football.clock.label': '比赛时间 · {period}',
+  'football.addedTime': '补时',
+  'football.addedTime.title': '补时 {time}',
+  'football.addedTime.set': '设定',
+  'football.addedTime.set.title': '设补时 {n} 分钟',
+  'football.addedTime.custom': '分钟',
+  'football.addedTime.start': '开表',
+  'football.addedTime.pause': '暂停',
+  'football.addedTime.toggle.title': '补时开表 / 停表(补时走的是独立的第二个表)',
+  'football.addedTime.clear': '清除',
+  'football.half.label': '半场 / 中场休息',
+  'football.half.first': '上半场',
+  'football.half.second': '下半场',
+  'football.half.halftime': '中场休息',
+  'football.halfEnd': '结束上半场',
+  'football.halfEnd.title': '上半场结束:主钟停表并停在 45:00(补时另走一个表)',
+  'football.halftime.start': '开始中场休息 {n} 分',
+  'football.halftime.start.title': '进入中场休息并开始倒计时',
+  'football.halftime.pause': '暂停',
+  'football.halftime.resume': '继续',
+  'football.halftime.toggle.title': '中场倒计时暂停 / 继续',
+  'football.halftime.end': '结束中场 · 下半场',
+  'football.halftime.title': '中场休息 {time}',
+  'football.backToFirst': '回到上半场',
+  'football.backToFirst.title': '把比赛退回上半场(破坏性操作,会清掉补时)',
+
   /* ------------------------------ 队伍卡 ------------------------------ */
   'team.possession': '进攻权',
   'team.add1': '加 1 分',
@@ -196,6 +226,15 @@ export const zhCN = {
   'toast.match.scheduled': '比赛状态:未开始',
   'toast.buzzer': '蜂鸣器已鸣响',
   'toast.undo': '已撤销上一步',
+  'toast.half.end': '上半场已结束',
+  'toast.addedTime.set': '补时已设为 {time}',
+  'toast.addedTime.started': '补时 {time} 已开始',
+  'toast.addedTime.paused': '补时已暂停',
+  'toast.addedTime.cleared': '补时已清除',
+  'toast.halftime.start': '中场休息已开始',
+  'toast.halftime.resumed': '中场倒计时已继续',
+  'toast.halftime.paused': '中场倒计时已暂停',
+  'toast.halftime.end': '已进入下半场',
 
   /* ------------------------------ 断线提示 ------------------------------ */
   'offline.connecting': '正在连接服务器…',
@@ -219,6 +258,11 @@ export const zhCN = {
   'board.startup.at': '{time} 开赛',
   /** 倒计时归零之后大屏写这句:到点了,该计分员按「开始」了 */
   'board.startup.tipoff': '开赛',
+  'board.addedTime.title': '补时 {time}',
+  'board.halftime': '中场休息',
+  'board.halftime.title': '中场休息 {time}',
+  'board.halftime.hint': '中场休息倒计时',
+  'board.halftime.wait': '中场休息已结束,请计分员开始下半场',
   'board.audio.big': '点击屏幕开启音效',
   'board.audio.small': '浏览器要求先有一次点击,比赛钟归零时才会自动蜂鸣(点击后会试响一声)',
 
@@ -276,8 +320,15 @@ export const zhCN = {
   'setup.info.startCountdown.apply': '确定',
   'setup.rules.title': '规则参数',
   'setup.rules.hint': '所有参数均可按本次比赛覆盖,不必改代码。',
+  'setup.sport': '运动项目',
+  'setup.sport.hint':
+    '换项目会换成该项目的默认规则(篮球 4×10,足球 2×45),并切换控制台与大屏的控件。',
   'setup.rules.periods': '节数',
   'setup.rules.periodMinutes': '每节分钟数',
+  'setup.rules.halves': '半场数',
+  'setup.rules.halfMinutes': '每半场分钟数',
+  'setup.rules.halftimeMinutes': '中场休息(分钟)',
+  'setup.rules.halftimeMinutes.hint': '足球专用:中场休息的时长,默认 15 分钟',
   'setup.rules.shotSeconds': '进攻钟秒数',
   'setup.rules.timeouts': '每队暂停次数',
   'setup.rules.timeoutSeconds': '暂停时长(秒)',
@@ -338,6 +389,14 @@ export const zhCN = {
   'setup.err.delete': '删除失败',
   'setup.err.copy': '复制失败,请手动选择文本',
 
+  /* ------------------------------ OBS 叠加层 ------------------------------ */
+  'overlay.title': 'OBS 叠加层',
+  'overlay.hint':
+    '把这个地址加进 OBS 的「浏览器源」:背景透明,记分条固定贴左下角,跟着 1920×1080 一起缩放。',
+  'overlay.open': '打开叠加层',
+  'overlay.connecting': '正在连接…',
+  'overlay.url': '浏览器源地址',
+
   /* ------------------------------ 对比度提示 ------------------------------ */
   'contrast.invalid': '颜色格式无法识别',
   'contrast.good': '对比度 {r}:1 — 良好',
@@ -363,6 +422,16 @@ export const zhCN = {
   'server.base64Only': '仅支持 base64 图片',
   'server.timeoutUsedUp': '暂停已用完',
   'server.timeoutInProgress': '暂停进行中',
+  'server.notFootball': '本场不是足球比赛',
+  'server.alreadyHalftime': '已经在中场休息',
+  'server.alreadySecondHalf': '已经是下半场',
+  'server.halftimeNoAddedTime': '中场休息期间不能设补时',
+  'server.noAddedTime': '还没有设补时',
+  'server.firstHalfNotOver': '上半场还没结束',
+  'server.secondHalfNotOver': '下半场还没结束',
+  'server.addedTimeNotOver': '补时还没结束',
+  'server.notInHalftime': '当前不在中场休息',
+  'server.addedTimeRange': '补时应在 0 到 30 分钟之间',
 } as const;
 
 /** 所有文案键 */
@@ -394,6 +463,7 @@ export const enUS: Record<MessageKey, string> = {
 
   /* ------------------------------ 运动项目 ------------------------------ */
   'sport.basketball': 'Basketball',
+  'sport.football': 'Football',
 
   /* ------------------------------ 管理台 ------------------------------ */
   'dashboard.health.ok': 'Service OK',
@@ -412,6 +482,7 @@ export const enUS: Record<MessageKey, string> = {
   'dashboard.openDisplay': 'Open big screen',
   'dashboard.matchConfig': 'Match settings',
   'dashboard.create.title': 'New Match',
+  'dashboard.create.sport': 'Sport',
   'dashboard.create.home': 'Home team',
   'dashboard.create.away': 'Away team',
   'dashboard.create.court': 'Court',
@@ -493,6 +564,34 @@ export const enUS: Record<MessageKey, string> = {
   'shot.violation': '24s violation',
   'shot.violation.title': 'Confirm a 24-second violation: possession goes to the other team, shot clock resets',
 
+  /* ------------------------------ 足球面板 ------------------------------ */
+  'football.label': 'Football · Added time & halftime',
+  'football.clock.label': 'Match clock · {period}',
+  'football.addedTime': 'Added time',
+  'football.addedTime.title': 'Added time {time}',
+  'football.addedTime.set': 'Set',
+  'football.addedTime.set.title': 'Set added time to {n} minutes',
+  'football.addedTime.custom': 'min',
+  'football.addedTime.start': 'Start',
+  'football.addedTime.pause': 'Pause',
+  'football.addedTime.toggle.title': 'Start/stop the added-time clock (it runs on its own, apart from the game clock)',
+  'football.addedTime.clear': 'Clear',
+  'football.half.label': 'Half / halftime',
+  'football.half.first': 'First half',
+  'football.half.second': 'Second half',
+  'football.half.halftime': 'Halftime',
+  'football.halfEnd': 'End 1st half',
+  'football.halfEnd.title': 'End of the first half: the game clock stops at 45:00 (added time runs on its own clock)',
+  'football.halftime.start': 'Start halftime ({n} min)',
+  'football.halftime.start.title': 'Enter halftime and start the countdown',
+  'football.halftime.pause': 'Pause',
+  'football.halftime.resume': 'Resume',
+  'football.halftime.toggle.title': 'Pause/resume the halftime countdown',
+  'football.halftime.end': 'End halftime · 2nd half',
+  'football.halftime.title': 'Halftime {time}',
+  'football.backToFirst': 'Back to 1st half',
+  'football.backToFirst.title': 'Put the match back into the first half (destructive — it clears the added time)',
+
   /* ------------------------------ 队伍卡 ------------------------------ */
   'team.possession': 'Possession',
   'team.add1': 'Add 1 point',
@@ -543,6 +642,15 @@ export const enUS: Record<MessageKey, string> = {
   'toast.match.scheduled': 'Match status: not started',
   'toast.buzzer': 'Buzzer sounded',
   'toast.undo': 'Last step undone',
+  'toast.half.end': 'First half ended',
+  'toast.addedTime.set': 'Added time set to {time}',
+  'toast.addedTime.started': 'Added time {time} started',
+  'toast.addedTime.paused': 'Added time paused',
+  'toast.addedTime.cleared': 'Added time cleared',
+  'toast.halftime.start': 'Halftime started',
+  'toast.halftime.resumed': 'Halftime countdown resumed',
+  'toast.halftime.paused': 'Halftime countdown paused',
+  'toast.halftime.end': 'Second half started',
 
   /* ------------------------------ 断线提示 ------------------------------ */
   'offline.connecting': 'Connecting to the server…',
@@ -566,6 +674,11 @@ export const enUS: Record<MessageKey, string> = {
   'board.startup.at': 'Tip-off at {time}',
   /** Shown after the countdown hits zero: it is time to start, the scorer presses Start */
   'board.startup.tipoff': 'Tip-off',
+  'board.addedTime.title': 'Added time {time}',
+  'board.halftime': 'Halftime',
+  'board.halftime.title': 'Halftime {time}',
+  'board.halftime.hint': 'Halftime countdown',
+  'board.halftime.wait': 'Halftime is over — the scorer starts the second half',
   'board.audio.big': 'Tap the screen to enable sound',
   'board.audio.small':
     'The browser needs one tap before the game clock can sound the buzzer at zero (a test beep will play)',
@@ -628,8 +741,15 @@ export const enUS: Record<MessageKey, string> = {
   'setup.info.startCountdown.apply': 'Apply',
   'setup.rules.title': 'Rules',
   'setup.rules.hint': 'Every value can be overridden for this match — no code changes needed.',
+  'setup.sport': 'Sport',
+  'setup.sport.hint':
+    'Switching sport switches to that sport’s default rules (basketball 4×10, football 2×45) and to its set of console and big-screen controls.',
   'setup.rules.periods': 'Periods',
   'setup.rules.periodMinutes': 'Minutes per period',
+  'setup.rules.halves': 'Halves',
+  'setup.rules.halfMinutes': 'Minutes per half',
+  'setup.rules.halftimeMinutes': 'Halftime (minutes)',
+  'setup.rules.halftimeMinutes.hint': 'Football only: how long the halftime break lasts (15 minutes by default)',
   'setup.rules.shotSeconds': 'Shot clock (seconds)',
   'setup.rules.timeouts': 'Timeouts per team',
   'setup.rules.timeoutSeconds': 'Timeout length (seconds)',
@@ -699,6 +819,14 @@ export const enUS: Record<MessageKey, string> = {
   'setup.err.delete': 'Delete failed',
   'setup.err.copy': 'Copy failed — please select the text manually',
 
+  /* ------------------------------ OBS 叠加层 ------------------------------ */
+  'overlay.title': 'OBS Overlay',
+  'overlay.hint':
+    'Add this URL as a browser source in OBS: transparent background, the score bar sits in the bottom-left corner and scales with 1920×1080.',
+  'overlay.open': 'Open overlay',
+  'overlay.connecting': 'Connecting…',
+  'overlay.url': 'Browser source URL',
+
   /* ------------------------------ 对比度提示 ------------------------------ */
   'contrast.invalid': 'Unrecognised colour format',
   'contrast.good': 'Contrast {r}:1 — good',
@@ -724,6 +852,16 @@ export const enUS: Record<MessageKey, string> = {
   'server.base64Only': 'Only base64 images are supported',
   'server.timeoutUsedUp': 'No timeouts left',
   'server.timeoutInProgress': 'A timeout is already in progress',
+  'server.notFootball': 'This match is not a football match',
+  'server.alreadyHalftime': 'Already in halftime',
+  'server.alreadySecondHalf': 'Already in the second half',
+  'server.halftimeNoAddedTime': 'Added time cannot be set during halftime',
+  'server.noAddedTime': 'No added time has been set',
+  'server.firstHalfNotOver': 'The first half is not over yet',
+  'server.secondHalfNotOver': 'The second half is not over yet',
+  'server.addedTimeNotOver': 'The added time has not run out yet',
+  'server.notInHalftime': 'Not in halftime right now',
+  'server.addedTimeRange': 'Added time must be between 0 and 30 minutes',
 };
 
 /**
@@ -744,4 +882,14 @@ export const SERVER_ERROR_KEYS: Record<string, MessageKey> = {
   '仅支持 base64 图片': 'server.base64Only',
   '暂停已用完': 'server.timeoutUsedUp',
   '暂停进行中': 'server.timeoutInProgress',
+  '本场不是足球比赛': 'server.notFootball',
+  '已经在中场休息': 'server.alreadyHalftime',
+  '已经是下半场': 'server.alreadySecondHalf',
+  '中场休息期间不能设补时': 'server.halftimeNoAddedTime',
+  '还没有设补时': 'server.noAddedTime',
+  '上半场还没结束': 'server.firstHalfNotOver',
+  '下半场还没结束': 'server.secondHalfNotOver',
+  '补时还没结束': 'server.addedTimeNotOver',
+  '当前不在中场休息': 'server.notInHalftime',
+  '补时应在 0 到 30 分钟之间': 'server.addedTimeRange',
 };

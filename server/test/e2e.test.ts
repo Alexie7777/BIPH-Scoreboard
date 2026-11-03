@@ -1049,3 +1049,119 @@ describe('端到端:控制台「重置」', () => {
     control.close();
   });
 });
+
+/* ============================================================================
+ * 端到端:足球(补时 → 中场休息 → 下半场)
+ *
+ * 这一组测的是 hub 循环里的三处"时间流逝自动收尾":
+ *   1. 主钟到 45:00 → 自动停表(足球的表是往上走的,到点就是半场结束);
+ *   2. 补时归零 → 自动进入中场休息(中场休息屏必须立刻出现);
+ *   3. 中场倒计时归零 → 只停下,**绝不自动开始下半场**。
+ * ========================================================================== */
+describe('端到端:足球', () => {
+  let matchId: string;
+  let controlToken: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${BASE}/api/matches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '足球测试',
+        homeName: '蓝队',
+        awayName: '红队',
+        sport: 'football',
+        court: '1',
+        rules: { periods: 2, periodMinutes: 45, halftimeMinutes: 0.02 },
+      }),
+    });
+    const created = (await res.json()) as { match: Match; operatorToken: string };
+    matchId = created.match.id;
+    controlToken = created.operatorToken;
+  }, 60_000);
+
+  it('主钟到点自动停表,并广播 clockZero 事件', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 把主钟拨到 1 秒(锚点模型:改的是"还剩多少")
+    control.send({ t: 'cmd', cmdId: 'f1', type: 'clock.set', payload: { ms: 1000 } });
+    await until(() => display.match?.clock.remainingMs === 1000);
+    control.send({ t: 'cmd', cmdId: 'f2', type: 'clock.start', payload: {} });
+    await until(() => display.match?.clock.running === true);
+
+    // 归零之后服务端自动停表
+    await until(() => display.match?.clock.running === false, 10_000);
+    expect(display.match?.clock.remainingMs).toBe(0);
+
+    const events = display.messages.filter((m) => m.t === 'event' && m.kind === 'clockZero');
+    expect(events.length).toBeGreaterThan(0);
+
+    const res = await fetch(`${BASE}/api/matches/${matchId}/logs`);
+    const body = (await res.json()) as { logs?: { message: string }[] };
+    expect((body.logs ?? []).map((l) => l.message).join('\n')).toContain('上半场时间到');
+
+    display.close();
+    control.close();
+  });
+
+  it('补时归零 → 自动进入中场休息(倒计时停着,等计分员开表)', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 设 2 秒补时并开表
+    control.send({ t: 'cmd', cmdId: 'f3', type: 'addedTime.set', payload: { seconds: 2, start: true } });
+    await until(() => display.match?.addedTime?.running === true);
+    expect(display.match?.addedTime?.durationMs).toBe(2000);
+
+    // 归零之后自动进中场休息:halftime 锚点存在,但**没有自动开表**
+    await until(
+      () => display.match?.halftime !== null && display.match?.halftime !== undefined,
+      10_000,
+    );
+    expect(display.match?.halftime?.running).toBe(false);
+    expect(display.match?.clock.periodLabel).toBe('HT');
+
+    const res = await fetch(`${BASE}/api/matches/${matchId}/logs`);
+    const body = (await res.json()) as { logs?: { message: string }[] };
+    expect((body.logs ?? []).map((l) => l.message).join('\n')).toContain('进入中场休息');
+
+    display.close();
+    control.close();
+  });
+
+  it('中场倒计时归零 → 只停下,绝不自动开始下半场', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 开始中场休息(本场 halftimeMinutes = 0.02 分 ≈ 1.2 秒)
+    control.send({ t: 'cmd', cmdId: 'f4', type: 'halftime.start', payload: {} });
+    await until(() => display.match?.halftime?.running === true);
+
+    // 倒计时归零:服务端把表停住,但下半场不会自己开始
+    await until(() => display.match?.halftime?.running === false, 10_000);
+    expect(display.match?.halftime?.remainingMs).toBe(0);
+    expect(display.match?.clock.period).toBe(1);
+    expect(display.match?.clock.running).toBe(false);
+
+    display.close();
+    control.close();
+  });
+
+  it('计分员按「结束中场休息」→ 进入下半场,主钟回到 45:00 停着', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'f5', type: 'halftime.end', payload: {} });
+    await until(() => control.match?.clock.period === 2);
+    expect(control.match?.halftime).toBeNull();
+    expect(control.match?.clock.remainingMs).toBe(45 * 60_000);
+    expect(control.match?.clock.running).toBe(false);
+    expect(control.match?.clock.periodLabel).toBe('2H');
+
+    control.close();
+  });
+});

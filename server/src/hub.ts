@@ -4,7 +4,11 @@ import {
   DEFAULT_TIMEOUT_SECONDS,
   DEFAULT_VENUE_LOCALE,
   buildPeriodLabel,
+  halftimeDurationMs,
+  isFootball,
   isLocale,
+  isValidAddedTimeAnchor,
+  isValidHalftimeAnchor,
   isValidStartCountdownAnchor,
   type ClientMsg,
   type CommandType,
@@ -15,7 +19,14 @@ import {
   type ServerMsg,
 } from '@biph/shared';
 import { config } from './config.js';
-import { currentRemaining, endTimeoutAnchor, pauseClock, pauseShotClock, serverNow } from './clock.js';
+import {
+  currentRemaining,
+  endTimeoutAnchor,
+  enterHalftime,
+  pauseClock,
+  pauseShotClock,
+  serverNow,
+} from './clock.js';
 import { applyCommand, createMatch, newId, rejectReason, resetMatch } from './match.js';
 import type { Store } from './db.js';
 
@@ -84,22 +95,31 @@ export class Hub {
     for (const row of this.store.listRows()) {
       const match = JSON.parse(row.data) as Match;
       const now = serverNow();
-      // 归一化节次标签:标签恒由 (period, periods, status) 推导。
+      // 老库里没有运动项目字段,统一按篮球补上
+      if (!match.sport) match.sport = 'basketball';
+      // 归一化节次标签:标签恒由 (period, periods, status, 项目, 是否中场) 推导。
       // 旧库可能存着状态回退前残留的 FINAL,这里按当前状态重算一次。
       match.clock = {
         ...match.clock,
-        periodLabel: buildPeriodLabel(match.clock.period, match.rules.periods, match.status),
+        periodLabel: buildPeriodLabel(match.clock.period, match.rules.periods, match.status, {
+          sport: match.sport,
+          halftime: !!match.halftime,
+        }),
       };
-      // 老库里没有运动项目字段,统一按篮球补上
-      if (!match.sport) match.sport = 'basketball';
       // 老库里没有暂停时长与暂停倒计时,统一补上默认值
       if (!Number.isFinite(match.rules.timeoutSeconds) || (match.rules.timeoutSeconds ?? 0) <= 0) {
         match.rules.timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
       }
       if (!match.timeout) match.timeout = endTimeoutAnchor();
-      // 形状不对的开赛倒计时锚点(脏数据)直接丢掉 —— 宁可没有倒计时,也不能算出个怪数字
+      // 形状不对的锚点(脏数据)直接丢掉 —— 宁可没有,也不能算出个怪数字
       if (match.startCountdown && !isValidStartCountdownAnchor(match.startCountdown)) {
         match.startCountdown = null;
+      }
+      if (match.addedTime && !isValidAddedTimeAnchor(match.addedTime)) {
+        match.addedTime = null;
+      }
+      if (match.halftime && !isValidHalftimeAnchor(match.halftime)) {
+        match.halftime = null;
       }
       // 语言以场馆为准:老库里各场比赛存的语言可能五花八门,启动时统一成场馆语言
       const localeDirty = match.presentation.locale !== this.venueLocale;
@@ -398,7 +418,7 @@ export class Hub {
 
     // 会被拒绝的命令:直接回失败。
     // 放在压撤销栈之前 —— 按了没生效的操作不该出现在撤销栈里。
-    const reason = rejectReason(rt.match, type, payload);
+    const reason = rejectReason(rt.match, type, payload, now);
     if (reason) return { ok: false, error: reason };
 
     // 撤销前先压栈
@@ -481,10 +501,34 @@ export class Hub {
     for (const [matchId, rt] of this.runtimes) {
       const rem = currentRemaining(rt.match.clock, now);
       const shotRem = currentRemaining(rt.match.shotClock, now);
+      const football = isFootball(rt.match);
 
       // 归零检测:从 >0 变成 0
       if (rt.lastRemaining > 0 && rem === 0) {
-        this.broadcast(matchId, { t: 'event', kind: 'clockZero', at: now });
+        if (football) {
+          /*
+           * 足球:主钟到 45:00 就是一个半场的硬边界 —— 自动停表 + 鸣笛。
+           *
+           * 为什么足球自动停而篮球不自动停:
+           *   篮球到点之后还有换节/进攻钟的事,什么时候停由裁判说了算;
+           *   足球的 45:00 就是裁判鸣哨的那一刻,表必须停在那儿。
+           * 而且补时走的是**另一个表** —— 主钟停在这儿等补时表走完。
+           */
+          const msg = rt.match.clock.period >= 2 ? '下半场时间到' : '上半场时间到';
+          rt.match = {
+            ...rt.match,
+            clock: pauseClock(rt.match.clock, now),
+            seq: rt.match.seq + 1,
+            updatedAt: now,
+            lastEvent: msg,
+          };
+          this.persist(rt);
+          this.store.appendLog(matchId, now, msg);
+          this.broadcast(matchId, { t: 'event', kind: 'clockZero', at: now });
+          this.broadcastState(matchId);
+        } else {
+          this.broadcast(matchId, { t: 'event', kind: 'clockZero', at: now });
+        }
       }
       if (rt.lastShotRemaining > 0 && shotRem === 0) {
         /*
@@ -533,6 +577,79 @@ export class Hub {
           updatedAt: now,
         };
         this.persist(rt);
+        this.broadcastState(matchId);
+      }
+
+      /* --------------------- 足球:补时与中场休息 --------------------- */
+      /*
+       * 补时归零 → 自动收尾。
+       *
+       * 上半场:自动进入中场休息(倒计时**不自动开表**,等计分员按「开始中场休息」)。
+       *   这是全场唯一一处"归零自动推进":补时走完,中场休息屏必须立刻出现 ——
+       *   否则大屏会一直停在 45:00 上,观众以为还在踢。
+       * 下半场:补时走完就停表,比赛结束由计分员按「结束比赛」(不自动结束比赛)。
+       *
+       * 这一步不走命令通道(不压撤销栈):它是时间流逝的自然结果,
+       * 不是"计分员做的一个操作" —— 和暂停倒计时归零自动收尾一个道理。
+       */
+      const at = rt.match.addedTime;
+      if (at?.running && currentRemaining(at, now) <= 0) {
+        const stopped = { ...at, running: false, remainingMs: 0, anchorServerTs: now };
+        if (rt.match.clock.period === 1 && !rt.match.halftime) {
+          const msg = '上半场结束,进入中场休息';
+          rt.match = {
+            ...rt.match,
+            addedTime: stopped,
+            halftime: enterHalftime(halftimeDurationMs(rt.match.rules), now),
+            seq: rt.match.seq + 1,
+            updatedAt: now,
+            lastEvent: msg,
+          };
+          // 节次标签跟着变(1H → HT):标签由"是否在中场"推导,状态变了就得重算
+          rt.match.clock = {
+            ...rt.match.clock,
+            periodLabel: buildPeriodLabel(
+              rt.match.clock.period,
+              rt.match.rules.periods,
+              rt.match.status,
+              { sport: rt.match.sport, halftime: !!rt.match.halftime },
+            ),
+          };
+          this.persist(rt);
+          this.store.appendLog(matchId, now, msg);
+        } else {
+          const msg = '下半场补时结束';
+          rt.match = {
+            ...rt.match,
+            addedTime: stopped,
+            seq: rt.match.seq + 1,
+            updatedAt: now,
+            lastEvent: msg,
+          };
+          this.persist(rt);
+          this.store.appendLog(matchId, now, msg);
+        }
+        this.broadcastState(matchId);
+      }
+
+      /*
+       * 中场倒计时归零 → 停表。
+       *
+       * **绝不自动开始下半场** —— 球员还没回场,表不能自己开始走。
+       * 这是全场坚守的那条规矩:归零不自动开表,什么时候开打由计分员按。
+       */
+      const ht = rt.match.halftime;
+      if (ht?.running && currentRemaining(ht, now) <= 0) {
+        const msg = '中场休息时间到';
+        rt.match = {
+          ...rt.match,
+          halftime: { ...ht, running: false, remainingMs: 0, anchorServerTs: now },
+          seq: rt.match.seq + 1,
+          updatedAt: now,
+          lastEvent: msg,
+        };
+        this.persist(rt);
+        this.store.appendLog(matchId, now, msg);
         this.broadcastState(matchId);
       }
     }

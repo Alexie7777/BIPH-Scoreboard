@@ -1,12 +1,18 @@
 import {
   DEFAULT_PRESENTATION,
-  DEFAULT_RULES,
   DEFAULT_TIMEOUT_SECONDS,
+  MAX_ADDED_TIME_SECONDS,
   MAX_START_COUNTDOWN_MS,
   buildPeriodLabel,
+  defaultRulesFor,
+  formatAddedTime,
+  halftimeDurationMs,
+  isFootball,
+  isSportId,
   isValidStartMode,
   isValidStartTime,
   periodDurationMs,
+  resolveSport,
   shotClockDurationMs,
   type CommandType,
   type CreateMatchRequest,
@@ -18,6 +24,7 @@ import {
   type Possession,
   type Presentation,
   type Side,
+  type SportId,
   type Team,
 } from '@biph/shared';
 import {
@@ -26,17 +33,27 @@ import {
   createAnchor,
   currentRemaining,
   endTimeoutAnchor,
+  enterHalftime,
+  pauseAddedTime,
   pauseClock,
+  pauseHalftime,
   pauseShotClock,
+  rearmHalftime,
   resetClock,
   resetShotClock,
+  serverNow,
+  setAddedTime,
   setClock,
   setPeriod,
   setShotClock,
+  startAddedTime,
   startClock,
+  startHalftime,
   startShotClock,
   startTimeoutAnchor,
+  toggleAddedTime,
   toggleClock,
+  toggleHalftime,
 } from './clock.js';
 
 /* ============================================================================
@@ -51,8 +68,12 @@ const HOME_DEFAULT = { name: '主队', shortName: 'H', color: '#1d428a', textCol
 const AWAY_DEFAULT = { name: '客队', shortName: 'A', color: '#fdb927', textColor: '#14171e' };
 
 export function createMatch(req: CreateMatchRequest, now: number, id = newId()): Match {
+  // 项目决定默认规则:篮球 4×10,足球 2×45。
+  // 客户端只传"要改的部分",没传的按项目的默认来 —— 两边算出来的默认值
+  // 必须一致(shared/defaultRulesFor 就是为此存在的)。
+  const sport: SportId = resolveSport({ sport: req.sport });
   const rules: MatchRules = {
-    ...DEFAULT_RULES,
+    ...defaultRulesFor(sport),
     ...(req.rules ?? {}),
   };
   const presentation: Presentation = {
@@ -91,8 +112,8 @@ export function createMatch(req: CreateMatchRequest, now: number, id = newId()):
     venue: req.venue ?? '',
     court: req.court ?? '',
     status: 'scheduled',
-    // 目前只有篮球;老库里的比赛没有这个字段,前端按篮球兜底
-    sport: req.sport ?? 'basketball',
+    // 老库里的比赛没有这个字段,前端按篮球兜底
+    sport,
     rules,
     home,
     away,
@@ -100,7 +121,7 @@ export function createMatch(req: CreateMatchRequest, now: number, id = newId()):
       remainingMs: periodDurationMs(rules),
       running: false,
       period: 1,
-      periodLabel: buildPeriodLabel(1, rules.periods, 'scheduled'),
+      periodLabel: buildPeriodLabel(1, rules.periods, 'scheduled', { sport }),
       now,
     }),
     shotClock: createAnchor({
@@ -153,8 +174,36 @@ function clone(m: Match): Match {
     clock: { ...m.clock },
     shotClock: { ...m.shotClock },
     ...(m.timeout ? { timeout: { ...m.timeout } } : {}),
+    ...(m.addedTime ? { addedTime: { ...m.addedTime } } : {}),
+    ...(m.halftime ? { halftime: { ...m.halftime } } : {}),
     presentation: { ...m.presentation },
   };
+}
+
+/**
+ * 重算节次标签。
+ *
+ * 足球还要看「是不是在中场休息」—— 那是 HT,不是 1H/2H。
+ */
+function relabel(m: Match): void {
+  m.clock = {
+    ...m.clock,
+    periodLabel: buildPeriodLabel(m.clock.period, m.rules.periods, m.status, {
+      sport: m.sport,
+      halftime: !!m.halftime,
+    }),
+  };
+}
+
+/**
+ * 本半场是否已经结束(主钟停在 0 且停着)。
+ *
+ * 足球用它守住两件事:
+ *   - 没结束就不许进中场休息;
+ *   - 没结束就不许"设补时并开表"(补时是半场结束之后才宣布的)。
+ */
+function halfEnded(m: Match, now: number): boolean {
+  return currentRemaining(m.clock, now) <= 0 && !m.clock.running;
 }
 
 function sideOf(m: Match, side: Side): Team {
@@ -266,19 +315,29 @@ export function applyCommand(
     }
 
     /* ---------------------------- 比赛时钟 ---------------------------- */
+    /*
+     * 篮球与足球在这里分流:
+     *   - 篮球:开球时进攻钟要满 24 秒起步,暂停时进攻钟也要停;
+     *   - 足球:没有进攻钟,主钟一个走到底。
+     * 进球**不停表**(和篮球一样),那是裁判的事。
+     */
     case 'clock.start': {
       // 还没开赛(status 不是 live)→ 这一下就是开球:进攻钟满 24 秒起步
       const tipOff = m.status !== 'live';
       m.clock = startClock(m.clock, now);
       m.status = 'live';
-      followShotClock(m, now, tipOff);
-      log = tipOff ? '开球:比赛钟与进攻钟同时开始' : '比赛钟开始';
+      if (!isFootball(m)) followShotClock(m, now, tipOff);
+      log = tipOff
+        ? isFootball(m)
+          ? '开球:比赛钟开始'
+          : '开球:比赛钟与进攻钟同时开始'
+        : '比赛钟开始';
       break;
     }
     case 'clock.pause':
       m.clock = pauseClock(m.clock, now);
       // 比赛钟停,进攻钟也得停 —— 否则暂停期间进攻钟白走一截
-      m.shotClock = pauseShotClock(m.shotClock, now);
+      if (!isFootball(m)) m.shotClock = pauseShotClock(m.shotClock, now);
       log = '比赛钟暂停';
       break;
     case 'clock.toggle': {
@@ -286,11 +345,15 @@ export function applyCommand(
       const tipOff = willRun && m.status !== 'live';
       m.clock = toggleClock(m.clock, now);
       m.status = 'live';
-      if (willRun) followShotClock(m, now, tipOff);
-      else m.shotClock = pauseShotClock(m.shotClock, now);
+      if (!isFootball(m)) {
+        if (willRun) followShotClock(m, now, tipOff);
+        else m.shotClock = pauseShotClock(m.shotClock, now);
+      }
       log = m.clock.running
         ? tipOff
-          ? '开球:比赛钟与进攻钟同时开始'
+          ? isFootball(m)
+            ? '开球:比赛钟开始'
+            : '开球:比赛钟与进攻钟同时开始'
           : '比赛钟开始'
         : '比赛钟暂停';
       break;
@@ -318,12 +381,33 @@ export function applyCommand(
        * 比赛钟拉满到 10:00、进攻钟却还剩 16 秒在走,两个钟对不上,
        * 现场看着就是出了事故。
        */
+      if (isFootball(m)) {
+        // 足球没有进攻钟。补时一并清掉:补时属于刚刚作废的那一段时间,
+        // 留着它,下一个半场的补时就串了。
+        m.clock = resetClock(m.clock, m.rules, m.status, now, {
+          sport: m.sport,
+          halftime: !!m.halftime,
+        });
+        m.addedTime = null;
+        log = '比赛钟已重置(补时已清空)';
+        break;
+      }
       m.clock = resetClock(m.clock, m.rules, m.status, now);
       m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
       log = '比赛钟与进攻钟已重置';
       break;
     }
     case 'clock.nextPeriod': {
+      if (isFootball(m)) {
+        // 足球的"下一个节"就是下半场:主钟回到 45:00 停着,补时清空,
+        // 等计分员按「开始比赛」。
+        m.status = 'live';
+        m.halftime = null;
+        m.clock = setPeriod(m.clock, 2, m.rules, m.status, now, { sport: m.sport });
+        m.addedTime = null;
+        log = '进入下半场';
+        break;
+      }
       const next = m.clock.period + 1;
       // 先定状态再算标签:否则从「已结束」直接跳节,标签会沿用旧的 FINAL
       m.status = 'live';
@@ -336,6 +420,16 @@ export function applyCommand(
       break;
     }
     case 'clock.prevPeriod': {
+      if (isFootball(m)) {
+        // 回到上半场(主要用于把"点错进下半场"退回来)
+        m.status = 'live';
+        m.halftime = null;
+        m.clock = setPeriod(m.clock, 1, m.rules, m.status, now, { sport: m.sport });
+        m.addedTime = null;
+        log = '回到上半场';
+        destructive = true;
+        break;
+      }
       const prev = Math.max(1, m.clock.period - 1);
       m.clock = setPeriod(m.clock, prev, m.rules, m.status, now);
       log = `回到 ${m.clock.periodLabel}`;
@@ -528,6 +622,82 @@ export function applyCommand(
       break;
     }
 
+    /* --------------------- 足球:半场 / 补时 / 中场 --------------------- */
+    /*
+     * 足球比篮球多两个表,球场上的流程是这样:
+     *
+     *   上半场 00:00 → 45:00(主钟到点自动停表,服务端在 hub 循环里做)
+     *        → 裁判宣布补时 4 分钟(补时表开走,主钟停在 45:00)
+     *        → 补时归零 → **自动进入中场休息**(倒计时停着,等计分员按开始)
+     *        → 中场 15 分钟归零 → 停表(**绝不自动开始下半场**)
+     *        → 计分员按「结束中场休息」→ 下半场,主钟回到 45:00 停着
+     *
+     * 三个表各走各的:主钟、补时表、中场倒计时,互不干扰。
+     * 进球不停表 —— 什么时候停由裁判决定,计分员按「暂停」即可。
+     */
+    case 'half.end': {
+      // 上半场结束:主钟停表并停在 45:00(足球的表往上走,到点就是 45:00)
+      m.status = 'live';
+      m.clock = setClock(pauseClock(m.clock, now), 0, now);
+      log = '上半场结束';
+      break;
+    }
+    case 'addedTime.set': {
+      const seconds = Number(p.seconds ?? 0);
+      const start = p.start === true;
+      if (seconds <= 0) {
+        // 0 = 清除补时
+        m.addedTime = null;
+        log = '已清除补时';
+        break;
+      }
+      const anchor = setAddedTime(seconds, now, start);
+      m.addedTime = anchor;
+      log = start
+        ? `补时 ${formatAddedTime(anchor.durationMs)} 并开始`
+        : `补时 ${formatAddedTime(anchor.durationMs)}`;
+      break;
+    }
+    case 'addedTime.toggle': {
+      if (!m.addedTime) {
+        log = '还没有设补时';
+        break;
+      }
+      m.addedTime = toggleAddedTime(m.addedTime, now);
+      log = m.addedTime.running ? '补时开始' : '补时暂停';
+      break;
+    }
+    case 'halftime.start': {
+      if (!m.halftime) {
+        // 第一次按 = 进入中场休息(倒计时先停着)
+        m.halftime = enterHalftime(halftimeDurationMs(m.rules), now);
+      }
+      const left = currentRemaining(m.halftime, now);
+      // 倒计时已经归零还按 = 重新计时(中场延时)
+      m.halftime = left <= 0 ? rearmHalftime(m.halftime, now) : startHalftime(m.halftime, now);
+      log = '中场休息开始';
+      break;
+    }
+    case 'halftime.toggle': {
+      if (!m.halftime) {
+        log = '当前不在中场休息';
+        break;
+      }
+      m.halftime = toggleHalftime(m.halftime, now);
+      log = m.halftime.running ? '中场倒计时继续' : '中场倒计时暂停';
+      break;
+    }
+    case 'halftime.end': {
+      // 中场结束 → 下半场:主钟回到 45:00 停着,等计分员按「开始比赛」。
+      // 绝不自动开表 —— 球员还没回场,表不能自己开始走。
+      m.status = 'live';
+      m.halftime = null;
+      m.addedTime = null;
+      m.clock = setPeriod(m.clock, 2, m.rules, m.status, now, { sport: m.sport });
+      log = '中场结束,进入下半场';
+      break;
+    }
+
     /* ------------------------------ 比赛 ------------------------------ */
     case 'possession.set': {
       m.possession = (p.side ?? null) as Possession;
@@ -554,6 +724,10 @@ export function applyCommand(
         m.shotClock = pauseShotClock(m.shotClock, now);
         // 比赛结束就不必再倒计时了
         m.timeout = endTimeoutAnchor();
+        // 足球:中场休息屏与补时也要撤下来 —— 否则大屏上会盖着
+        // "中场休息 15:00",底下却是全场结束,自相矛盾。
+        m.halftime = null;
+        m.addedTime = null;
       }
       log = st === 'finished' ? '比赛结束' : st === 'live' ? '比赛开始' : '比赛未开始';
       break;
@@ -563,6 +737,8 @@ export function applyCommand(
       m.clock = pauseClock(m.clock, now);
       m.shotClock = pauseShotClock(m.shotClock, now);
       m.timeout = endTimeoutAnchor();
+      m.halftime = null;
+      m.addedTime = null;
       log = '比赛结束';
       destructive = true;
       break;
@@ -579,8 +755,16 @@ export function applyCommand(
       if (typeof patch.name === 'string') next.name = patch.name;
       if (typeof patch.venue === 'string') next.venue = patch.venue;
       if (typeof patch.court === 'string') next.court = patch.court;
-      if (patch.sport === 'basketball') next.sport = patch.sport;
-      if (patch.rules) next.rules = { ...next.rules, ...patch.rules };
+      if (isSportId(patch.sport)) next.sport = patch.sport;
+      /*
+       * 换项目 → 规则跟着换成新项目的默认(2×45 而不是 4×10),
+       * 再让客户端明确传过来的部分盖上去。
+       */
+      if (patch.sport && patch.sport !== m.sport) {
+        next.rules = { ...defaultRulesFor(patch.sport), ...(patch.rules ?? {}) };
+      } else if (patch.rules) {
+        next.rules = { ...next.rules, ...patch.rules };
+      }
       if (patch.presentation) next.presentation = { ...next.presentation, ...patch.presentation };
       if (patch.home) next.home = mergeTeamConfig(next.home, patch.home);
       if (patch.away) next.away = mergeTeamConfig(next.away, patch.away);
@@ -598,10 +782,7 @@ export function applyCommand(
         next.startCountdown = { durationMs: patch.startCountdownMs, anchorServerTs: now };
       }
       // 规则变化后,节次标签要跟着重算
-      next.clock = {
-        ...next.clock,
-        periodLabel: buildPeriodLabel(next.clock.period, next.rules.periods, next.status),
-      };
+      relabel(next);
       log = '更新比赛配置';
       m = next;
       break;
@@ -614,13 +795,10 @@ export function applyCommand(
   m.updatedAt = now;
   m.lastEvent = log;
 
-  // 节次标签恒由 (period, periods, status) 推导,放在出口统一重算。
+  // 节次标签恒由 (period, periods, status, 项目, 是否中场) 推导,放在出口统一重算。
   // 否则状态在命令之间来回切(如「比赛结束 → 重新开打」)时,标签会残留旧的 FINAL,
   // 大屏会在 Q2 走表时仍显示 FINAL。
-  m.clock = {
-    ...m.clock,
-    periodLabel: buildPeriodLabel(m.clock.period, m.rules.periods, m.status),
-  };
+  relabel(m);
 
   return { match: m, events, log, destructive };
 }
@@ -639,7 +817,12 @@ export function applyCommand(
  *   - applyCommand 保持"只描述状态怎么变",不掺协议语义
  *   - 拒绝时不压撤销栈(撤销栈在 hub 里压),现场按错了没东西可撤销
  */
-export function rejectReason(m: Match, type: CommandType, payload: unknown): string | null {
+export function rejectReason(
+  m: Match,
+  type: CommandType,
+  payload: unknown,
+  now: number = serverNow(),
+): string | null {
   const p = (payload ?? {}) as Record<string, unknown>;
   const side: Side = p.side === 'away' ? 'away' : 'home';
   const team = side === 'home' ? m.home : m.away;
@@ -679,6 +862,54 @@ export function rejectReason(m: Match, type: CommandType, payload: unknown): str
       }
       return null;
     }
+    /* ------------------- 足球:半场 / 补时 / 中场 ------------------- */
+    /*
+     * 这些拒绝理由是给现场看的,说人话:
+     * 计分员按错顺序(比如上半场还没打完就按「开始中场休息」)时,
+     * 界面会弹这句中文,而不是默默按下去没反应。
+     */
+    case 'half.end': {
+      if (!isFootball(m)) return '本场不是足球比赛';
+      if (m.halftime) return '已经在中场休息';
+      if (m.clock.period >= 2) return '已经是下半场';
+      return null;
+    }
+    case 'addedTime.set': {
+      if (!isFootball(m)) return '本场不是足球比赛';
+      if (m.halftime) return '中场休息期间不能设补时';
+      const seconds = Number(p.seconds ?? 0);
+      if (!Number.isFinite(seconds) || seconds < 0 || seconds > MAX_ADDED_TIME_SECONDS) {
+        return `补时应在 0 到 ${Math.round(MAX_ADDED_TIME_SECONDS / 60)} 分钟之间`;
+      }
+      // 补时是半场结束之后才宣布的:主钟还在跑就开补时表,那是把两个表搞混了
+      if (p.start === true && !halfEnded(m, now)) {
+        return m.clock.period >= 2 ? '下半场还没结束' : '上半场还没结束';
+      }
+      return null;
+    }
+    case 'addedTime.toggle': {
+      if (!isFootball(m)) return '本场不是足球比赛';
+      if (m.halftime) return '中场休息期间不能设补时';
+      if (!m.addedTime) return '还没有设补时';
+      return null;
+    }
+    case 'halftime.start': {
+      if (!isFootball(m)) return '本场不是足球比赛';
+      if (m.halftime) return null; // 已经在中场 → 就是把倒计时开起来
+      if (m.clock.period >= 2) return '已经是下半场';
+      if (!halfEnded(m, now)) return '上半场还没结束';
+      // 补时还在跑 → 半场其实没完,不能进中场
+      if (m.addedTime?.running && currentRemaining(m.addedTime, now) > 0) {
+        return '补时还没结束';
+      }
+      return null;
+    }
+    case 'halftime.toggle':
+    case 'halftime.end': {
+      if (!isFootball(m)) return '本场不是足球比赛';
+      if (!m.halftime) return '当前不在中场休息';
+      return null;
+    }
     default:
       return null;
   }
@@ -695,7 +926,7 @@ export function resetMatch(current: Match, now: number): Match {
     remainingMs: periodDurationMs(m.rules),
     running: false,
     period: 1,
-    periodLabel: buildPeriodLabel(1, m.rules.periods, 'scheduled'),
+    periodLabel: buildPeriodLabel(1, m.rules.periods, 'scheduled', { sport: m.sport }),
     now,
   });
   m.shotClock = createAnchor({
@@ -706,6 +937,9 @@ export function resetMatch(current: Match, now: number): Match {
     now,
   });
   m.timeout = endTimeoutAnchor();
+  // 足球:补时与中场休息一并回到"没有"的状态
+  m.addedTime = null;
+  m.halftime = null;
   m.seq = current.seq + 1;
   m.updatedAt = now;
   m.lastEvent = '比赛已重置';

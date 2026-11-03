@@ -1178,6 +1178,69 @@ h4 {
   flex: 1;
 }
 
+/* --------------------------- 足球:补时与中场 ---------------------------
+ * 足球比篮球多两个表(补时、中场倒计时),这两块面板是足球专属的。
+ * ------------------------------------------------------------------- */
+.football-panel {
+  gap: 12px;
+}
+
+.football-panel .fb-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
+.football-panel .fb-block:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.football-panel .fb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.football-panel .fb-head-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+}
+
+.football-panel .fb-half {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.football-panel .fb-added {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.football-panel .fb-sign {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-dim);
+  line-height: 1;
+}
+
+.football-panel .fb-custom {
+  display: flex;
+  gap: 8px;
+}
+
+.football-panel .fb-custom input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 /* 队卡 */
 
 .team-card {
@@ -1628,6 +1691,26 @@ h4 {
   animation: shot-blink 0.7s steps(2, end) infinite;
 }
 
+/*
+ * 补时表(足球)。
+ *
+ * 主钟停在 45:00 不动,补时走的是独立的第二个表 —— 所以它单独占一行,
+ * "+" 号用文字画(七段数码管只认数字与冒号)。
+ */
+.board-center .added-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.board-center .added-wrap .added-sign {
+  font-size: 52px;
+  font-weight: 800;
+  color: var(--board-dim, #98a3bd);
+  line-height: 1;
+}
+
 @keyframes shot-blink {
   0%,
   100% {
@@ -1783,6 +1866,57 @@ h4 {
 }
 
 .board-startup .su-court {
+  font-size: 30px;
+  color: var(--board-dim, #98a3bd);
+  letter-spacing: 0.2em;
+  text-align: center;
+}
+
+/*
+ * 中场休息屏(足球)。
+ *
+ * 与开赛倒计时同一套做法:铺满画布、跟着 1920×1080 一起缩放,
+ * 背景用画布底色把下面的比分盖住 —— 中场这十几分钟,观众该看的是
+ * "还有多久回来",而不是两个队名和 0:0。
+ */
+.board-halftime {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  background: var(--board-bg, #0b0e14);
+}
+
+.board-halftime .hf-event {
+  font-size: 56px;
+  font-weight: 800;
+  color: var(--board-fg, #fff);
+  letter-spacing: 0.04em;
+  text-align: center;
+  max-width: 78%;
+}
+
+.board-halftime .hf-label {
+  font-size: 44px;
+  font-weight: 700;
+  color: var(--board-dim, #98a3bd);
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  text-align: center;
+}
+
+.board-halftime .hf-hint {
+  font-size: 32px;
+  font-weight: 600;
+  color: var(--board-dim, #98a3bd);
+  text-align: center;
+}
+
+.board-halftime .hf-court {
   font-size: 30px;
   color: var(--board-dim, #98a3bd);
   letter-spacing: 0.2em;

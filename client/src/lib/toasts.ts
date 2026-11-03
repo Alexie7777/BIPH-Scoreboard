@@ -13,6 +13,7 @@
  * 队伍名是唯一的例外:它来自比赛配置,整场不变,写进提示是安全的。
  */
 import type { CommandType, Match, Side } from '@biph/shared';
+import { formatAddedTime } from '@biph/shared';
 import type { MessageKey, Vars } from '../i18n';
 
 export interface ToastAction {
@@ -146,6 +147,30 @@ export function describeCommand(
      */
     case 'match.update':
       return null;
+
+    /* ------------------------------- 足球 ------------------------------- */
+    case 'half.end':
+      return { key: 'toast.half.end' };
+    case 'addedTime.set': {
+      const seconds = Number(p.seconds ?? 0);
+      if (seconds <= 0) return { key: 'toast.addedTime.cleared' };
+      const time = formatAddedTime(seconds * 1000);
+      return p.start === true
+        ? { key: 'toast.addedTime.started', vars: { time } }
+        : { key: 'toast.addedTime.set', vars: { time } };
+    }
+    case 'addedTime.toggle': {
+      const duration = match?.addedTime?.durationMs ?? 0;
+      return match?.addedTime?.running
+        ? { key: 'toast.addedTime.paused' }
+        : { key: 'toast.addedTime.started', vars: { time: formatAddedTime(duration) } };
+    }
+    case 'halftime.start':
+      return { key: 'toast.halftime.start' };
+    case 'halftime.toggle':
+      return { key: match?.halftime?.running ? 'toast.halftime.paused' : 'toast.halftime.resumed' };
+    case 'halftime.end':
+      return { key: 'toast.halftime.end' };
 
     default:
       return null;

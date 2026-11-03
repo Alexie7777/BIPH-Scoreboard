@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { Locale, Match, MatchHealth } from '@biph/shared';
+import { SPORT_IDS, defaultRulesFor, type Locale, type Match, type MatchHealth, type SportId } from '@biph/shared';
 import {
   captureTokens,
   createMatch,
@@ -39,6 +39,7 @@ interface FormState {
   court: string;
   homeName: string;
   awayName: string;
+  sport: SportId;
   periods: number;
   periodMinutes: number;
   shotClockSeconds: number;
@@ -46,18 +47,40 @@ interface FormState {
   bonusFouls: number;
 }
 
+/** 建赛表单的初始值(篮球)。换项目时会换成那个项目的默认规则。 */
 const EMPTY_FORM: FormState = {
   name: '',
   venue: '',
   court: '',
   homeName: '',
   awayName: '',
+  sport: 'basketball',
   periods: 4,
   periodMinutes: 10,
   shotClockSeconds: 24,
   timeoutsPerTeam: 4,
   bonusFouls: 5,
 };
+
+/**
+ * 按项目填默认规则。
+ *
+ * 与服务端 shared/defaultRulesFor 是同一份口径 —— 管理台里显示的默认值
+ * 必须就是保存后真正生效的值,不然现场会觉得"我明明填的是 45 分钟"。
+ */
+function rulesForSport(sport: SportId): Pick<
+  FormState,
+  'periods' | 'periodMinutes' | 'shotClockSeconds' | 'timeoutsPerTeam' | 'bonusFouls'
+> {
+  const d = defaultRulesFor(sport);
+  return {
+    periods: d.periods,
+    periodMinutes: d.periodMinutes,
+    shotClockSeconds: d.shotClockSeconds,
+    timeoutsPerTeam: d.timeoutsPerTeam,
+    bonusFouls: d.bonusFouls,
+  };
+}
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -195,6 +218,7 @@ export default function Dashboard() {
         court: form.court.trim(),
         homeName: form.homeName.trim(),
         awayName: form.awayName.trim(),
+        sport: form.sport,
         rules: {
           periods: form.periods,
           periodMinutes: form.periodMinutes,
@@ -399,6 +423,31 @@ export default function Dashboard() {
                     placeholder={t('dashboard.ph.venue')}
                   />
                 </div>
+
+                {/*
+                  运动项目:决定后面那些规则参数的默认值(篮球 4×10,足球 2×45),
+                  也决定控制台与大屏显示哪一套控件。
+                  换项目 → 规则跟着换成新项目的默认值,免得留着一堆篮球参数。
+                */}
+                <div className="field field-wide">
+                  <span className="field-label" id="f-sport-label">
+                    {t('dashboard.create.sport')}
+                  </span>
+                  <div className="mode-toggle" role="group" aria-labelledby="f-sport-label">
+                    {SPORT_IDS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={form.sport === s ? 'on' : ''}
+                        aria-pressed={form.sport === s}
+                        onClick={() => setForm({ ...form, sport: s, ...rulesForSport(s) })}
+                      >
+                        {sportEmoji(s)} {sportLabel(s, locale)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="field">
                   <label htmlFor="f-periods">{t('dashboard.create.periods')}</label>
                   <input

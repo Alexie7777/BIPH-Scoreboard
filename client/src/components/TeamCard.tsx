@@ -24,6 +24,12 @@ export interface TeamCardProps {
   timeoutActive?: boolean;
   /** 是否已有暂停在进行中(别的队叫的)—— 本队不能再请求 */
   timeoutLocked?: boolean;
+  /** 是否显示犯规计数(足球没有犯规统计,整块隐藏) */
+  showFouls?: boolean;
+  /** 是否显示暂停计数与「请求暂停」(足球没有暂停) */
+  showTimeouts?: boolean;
+  /** 是否显示 +2 / +3(足球一个球就是 1 分) */
+  showMultiPoint?: boolean;
   disabled?: boolean;
 }
 
@@ -39,6 +45,9 @@ export function TeamCard({
   onResumeMatch,
   timeoutActive = false,
   timeoutLocked = false,
+  showFouls = true,
+  showTimeouts = true,
+  showMultiPoint = true,
   disabled = false,
 }: TeamCardProps) {
   const { t } = useI18n();
@@ -72,99 +81,109 @@ export function TeamCard({
         <div className="big-score">{team.score}</div>
         <div className="team-controls">
           <ScoreButton label="+1" onPress={() => onScore(1)} disabled={disabled} title={t('team.add1')} />
-          <ScoreButton label="+2" onPress={() => onScore(2)} disabled={disabled} title={t('team.add2')} />
-          <ScoreButton label="+3" onPress={() => onScore(3)} disabled={disabled} title={t('team.add3')} />
+          {showMultiPoint ? (
+            <>
+              <ScoreButton label="+2" onPress={() => onScore(2)} disabled={disabled} title={t('team.add2')} />
+              <ScoreButton label="+3" onPress={() => onScore(3)} disabled={disabled} title={t('team.add3')} />
+            </>
+          ) : null}
           <ScoreButton label="-1" variant="minus" onPress={onScoreSub} disabled={disabled} title={t('team.sub1')} />
           {/* 请求暂停 / 继续比赛:放在比分按钮正下方,现场一眼就能摸到 */}
-          <button
-            type="button"
-            className={timeoutActive ? 'timeout-request active' : 'timeout-request'}
-            disabled={requestBlocked}
-            title={requestTitle}
-            onPointerDown={() => {
-              try {
-                if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
-              } catch {
-                /* ignore */
-              }
-            }}
-            onClick={timeoutActive ? onResumeMatch : onRequestTimeout}
-          >
-            {timeoutActive ? t('team.timeout.resume') : t('team.timeout.request')}
-          </button>
+          {showTimeouts ? (
+            <button
+              type="button"
+              className={timeoutActive ? 'timeout-request active' : 'timeout-request'}
+              disabled={requestBlocked}
+              title={requestTitle}
+              onPointerDown={() => {
+                try {
+                  if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              onClick={timeoutActive ? onResumeMatch : onRequestTimeout}
+            >
+              {timeoutActive ? t('team.timeout.resume') : t('team.timeout.request')}
+            </button>
+          ) : null}
         </div>
       </div>
 
       <div className="counters">
-        <div className={bonus ? 'counter bonus' : 'counter'}>
-          <span className="counter-label">{t('team.fouls')}</span>
-          <button
-            type="button"
-            className="mini-btn"
-            disabled={disabled}
-            onPointerDown={() => {
-              try {
-                if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
-              } catch {
-                /* ignore */
-              }
-            }}
-            onClick={() => onFoul(1)}
-            title={t('team.foul.add')}
-          >
-            +
-          </button>
-          <span className="counter-value">
-            {team.fouls}
-            <span style={{ fontSize: 13, color: 'var(--text-faint)' }}> / {rules.bonusFouls}</span>
-          </span>
-          <button
-            type="button"
-            className="mini-btn"
-            disabled={disabled}
-            onClick={() => onFoul(-1)}
-            title={t('team.foul.sub')}
-          >
-            −
-          </button>
-          {bonus ? <span className="badge bonus">BONUS</span> : null}
-        </div>
+        {showFouls ? (
+          <div className={bonus ? 'counter bonus' : 'counter'}>
+            <span className="counter-label">{t('team.fouls')}</span>
+            <button
+              type="button"
+              className="mini-btn"
+              disabled={disabled}
+              onPointerDown={() => {
+                try {
+                  if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              onClick={() => onFoul(1)}
+              title={t('team.foul.add')}
+            >
+              +
+            </button>
+            <span className="counter-value">
+              {team.fouls}
+              <span style={{ fontSize: 13, color: 'var(--text-faint)' }}> / {rules.bonusFouls}</span>
+            </span>
+            <button
+              type="button"
+              className="mini-btn"
+              disabled={disabled}
+              onClick={() => onFoul(-1)}
+              title={t('team.foul.sub')}
+            >
+              −
+            </button>
+            {bonus ? <span className="badge bonus">BONUS</span> : null}
+          </div>
+        ) : null}
 
-        <div className="counter">
-          <span className="counter-label">{t('team.timeouts')}</span>
-          <button
-            type="button"
-            className="mini-btn"
-            disabled={disabled || timeoutUsedUp}
-            onPointerDown={() => {
-              try {
-                if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
-              } catch {
-                /* ignore */
-              }
-            }}
-            onClick={() => onTimeout(1)}
-            title={timeoutUsedUp ? t('team.timeout.used') : t('team.timeout.use')}
-          >
-            +
-          </button>
-          <span
-            className="counter-value"
-            title={t('team.timeout.remain', { n: team.timeouts, m: rules.timeoutsPerTeam })}
-          >
-            {team.timeouts}
-            <span style={{ fontSize: 13, color: 'var(--text-faint)' }}> / {rules.timeoutsPerTeam}</span>
-          </span>
-          <button
-            type="button"
-            className="mini-btn"
-            disabled={disabled}
-            onClick={() => onTimeout(-1)}
-            title={t('team.timeout.undo')}
-          >
-            −
-          </button>
-        </div>
+        {showTimeouts ? (
+          <div className="counter">
+            <span className="counter-label">{t('team.timeouts')}</span>
+            <button
+              type="button"
+              className="mini-btn"
+              disabled={disabled || timeoutUsedUp}
+              onPointerDown={() => {
+                try {
+                  if (typeof navigator.vibrate === 'function') navigator.vibrate(15);
+                } catch {
+                  /* ignore */
+                }
+              }}
+              onClick={() => onTimeout(1)}
+              title={timeoutUsedUp ? t('team.timeout.used') : t('team.timeout.use')}
+            >
+              +
+            </button>
+            <span
+              className="counter-value"
+              title={t('team.timeout.remain', { n: team.timeouts, m: rules.timeoutsPerTeam })}
+            >
+              {team.timeouts}
+              <span style={{ fontSize: 13, color: 'var(--text-faint)' }}> / {rules.timeoutsPerTeam}</span>
+            </span>
+            <button
+              type="button"
+              className="mini-btn"
+              disabled={disabled}
+              onClick={() => onTimeout(-1)}
+              title={t('team.timeout.undo')}
+            >
+              −
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

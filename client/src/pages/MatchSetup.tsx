@@ -7,8 +7,8 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { Locale, Match, MatchRules, Presentation, StartMode, Team } from '@biph/shared';
-import { DEFAULT_TIMEOUT_SECONDS } from '@biph/shared';
+import type { Locale, Match, MatchRules, Presentation, StartMode, SportId, Team } from '@biph/shared';
+import { DEFAULT_HALFTIME_MINUTES, DEFAULT_TIMEOUT_SECONDS, SPORT_IDS, defaultRulesFor, isFootball, resolveSport } from '@biph/shared';
 import {
   buildControlUrl,
   buildDisplayUrl,
@@ -27,6 +27,7 @@ import {
 } from '../lib/api';
 import { describeContrast } from '../lib/colors';
 import { formatStartCountdownInput, parseStartCountdown, resolveStartMode } from '../lib/format';
+import { sportEmoji, sportLabel } from '../lib/sports';
 import { formatClockTime, setScopedLocale, useI18n } from '../i18n';
 import { AdminKeyPrompt } from '../components/AdminKeyPrompt';
 import { CountdownPicker } from '../components/CountdownPicker';
@@ -391,6 +392,26 @@ export default function MatchSetup() {
     void instantPatch({ rules: patch }, () => setDraft((d) => (d ? { ...d, rules: prev } : d)));
   }
 
+  /**
+   * 换运动项目。
+   *
+   * 规则跟着换成新项目的默认(篮球 4×10,足球 2×45)——
+   * 留着篮球的参数(4 节、24 秒进攻钟、每队 4 次暂停)去踢足球,现场没法用。
+   *
+   * 立刻下发,不用再点「保存」:项目一变,控制台与大屏的控件整套都不一样,
+   * 等到保存才生效,中间那一会儿两边的显示会打架。
+   */
+  function changeSport(sport: SportId) {
+    if (!draft) return;
+    const prevSport = draft.sport;
+    const prevRules = { ...draft.rules };
+    const nextRules = defaultRulesFor(sport);
+    setDraft((d) => (d ? { ...d, sport, rules: nextRules } : d));
+    void instantPatch({ sport, rules: nextRules }, () =>
+      setDraft((d) => (d ? { ...d, sport: prevSport, rules: prevRules } : d)),
+    );
+  }
+
   /** 显示设置里的开关/下拉:选了就生效 */
   function togglePresentation(patch: Partial<Presentation>) {
     if (!draft) return;
@@ -695,6 +716,9 @@ export default function MatchSetup() {
    * 密钥有默认值(1818),也可能是部署时用 ADMIN_KEY 环境变量改过的。
    * 弹窗里直接把这两条告诉用户,省得"页面上查不到就以为系统坏了"。
    */
+  /* 足球的规则面板与篮球不一样:没有进攻钟/暂停/犯规,多一个中场休息时长 */
+  const football = isFootball(draft);
+
   return (
     <div className="page">
       <header className="topbar">
@@ -870,9 +894,35 @@ export default function MatchSetup() {
           <div className="panel">
             <h2>{t('setup.rules.title')}</h2>
             <p className="panel-hint">{t('setup.rules.hint')}</p>
+
+            {/*
+              运动项目:决定默认规则,也决定控制台与大屏显示哪一套控件。
+              换项目 → 规则跟着换成新项目的默认(篮球 4×10,足球 2×45)。
+            */}
+            <div className="field field-wide" style={{ marginBottom: 14 }}>
+              <span className="field-label" id="r-sport-label">
+                {t('setup.sport')}
+              </span>
+              <div className="mode-toggle" role="group" aria-labelledby="r-sport-label">
+                {SPORT_IDS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={resolveSport(draft) === s ? 'on' : ''}
+                    aria-pressed={resolveSport(draft) === s}
+                    onClick={() => changeSport(s)}
+                  >
+                    {sportEmoji(s)} {sportLabel(s, locale)}
+                  </button>
+                ))}
+              </div>
+              <small className="field-hint">{t('setup.sport.hint')}</small>
+            </div>
             <div className="form-grid">
               <div className="field">
-                <label htmlFor="r-periods">{t('setup.rules.periods')}</label>
+                <label htmlFor="r-periods">
+                  {football ? t('setup.rules.halves') : t('setup.rules.periods')}
+                </label>
                 <input
                   id="r-periods"
                   type="number"
@@ -883,7 +933,9 @@ export default function MatchSetup() {
                 />
               </div>
               <div className="field">
-                <label htmlFor="r-minutes">{t('setup.rules.periodMinutes')}</label>
+                <label htmlFor="r-minutes">
+                  {football ? t('setup.rules.halfMinutes') : t('setup.rules.periodMinutes')}
+                </label>
                 <input
                   id="r-minutes"
                   type="number"
@@ -893,89 +945,116 @@ export default function MatchSetup() {
                   onChange={(e) => patchRules({ periodMinutes: Number(e.target.value) || 1 })}
                 />
               </div>
-              <div className="field">
-                <label htmlFor="r-shot">{t('setup.rules.shotSeconds')}</label>
-                <input
-                  id="r-shot"
-                  type="number"
-                  min={0}
-                  max={99}
-                  value={draft.rules.shotClockSeconds}
-                  onChange={(e) => patchRules({ shotClockSeconds: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="r-to">{t('setup.rules.timeouts')}</label>
-                <input
-                  id="r-to"
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={draft.rules.timeoutsPerTeam}
-                  onChange={(e) => patchRules({ timeoutsPerTeam: Number(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="field">
-                <label htmlFor="r-timeout">{t('setup.rules.timeoutSeconds')}</label>
-                <input
-                  id="r-timeout"
-                  type="number"
-                  min={5}
-                  max={600}
-                  value={draft.rules.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS}
-                  onChange={(e) =>
-                    patchRules({ timeoutSeconds: Number(e.target.value) || DEFAULT_TIMEOUT_SECONDS })
-                  }
-                />
-                <span className="hint">{t('setup.rules.timeoutSeconds.hint')}</span>
-              </div>
-              <div className="field">
-                <label htmlFor="r-bonus">{t('setup.rules.bonus')}</label>
-                <input
-                  id="r-bonus"
-                  type="number"
-                  min={0}
-                  max={20}
-                  value={draft.rules.bonusFouls}
-                  onChange={(e) => patchRules({ bonusFouls: Number(e.target.value) || 0 })}
-                />
-              </div>
+              {football ? (
+                <div className="field">
+                  <label htmlFor="r-halftime">{t('setup.rules.halftimeMinutes')}</label>
+                  <input
+                    id="r-halftime"
+                    type="number"
+                    min={1}
+                    max={60}
+                    value={draft.rules.halftimeMinutes ?? DEFAULT_HALFTIME_MINUTES}
+                    onChange={(e) =>
+                      patchRules({ halftimeMinutes: Number(e.target.value) || DEFAULT_HALFTIME_MINUTES })
+                    }
+                  />
+                  <span className="hint">{t('setup.rules.halftimeMinutes.hint')}</span>
+                </div>
+              ) : (
+                <>
+                  <div className="field">
+                    <label htmlFor="r-shot">{t('setup.rules.shotSeconds')}</label>
+                    <input
+                      id="r-shot"
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={draft.rules.shotClockSeconds}
+                      onChange={(e) => patchRules({ shotClockSeconds: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="r-to">{t('setup.rules.timeouts')}</label>
+                    <input
+                      id="r-to"
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={draft.rules.timeoutsPerTeam}
+                      onChange={(e) => patchRules({ timeoutsPerTeam: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div className="field">
+                    <label htmlFor="r-timeout">{t('setup.rules.timeoutSeconds')}</label>
+                    <input
+                      id="r-timeout"
+                      type="number"
+                      min={5}
+                      max={600}
+                      value={draft.rules.timeoutSeconds ?? DEFAULT_TIMEOUT_SECONDS}
+                      onChange={(e) =>
+                        patchRules({ timeoutSeconds: Number(e.target.value) || DEFAULT_TIMEOUT_SECONDS })
+                      }
+                    />
+                    <span className="hint">{t('setup.rules.timeoutSeconds.hint')}</span>
+                  </div>
+                  <div className="field">
+                    <label htmlFor="r-bonus">{t('setup.rules.bonus')}</label>
+                    <input
+                      id="r-bonus"
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={draft.rules.bonusFouls}
+                      onChange={(e) => patchRules({ bonusFouls: Number(e.target.value) || 0 })}
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
             {/* 开关类:勾上立即下发(大屏同步更新),不需要点「保存」 */}
             <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={draft.rules.useShotClock}
-                  onChange={(e) => toggleRule({ useShotClock: e.target.checked })}
-                />
-                {t('setup.switch.shot')}
-              </label>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={draft.rules.showTeamFouls}
-                  onChange={(e) => toggleRule({ showTeamFouls: e.target.checked })}
-                />
-                {t('setup.switch.fouls')}
-              </label>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={draft.rules.showTimeouts}
-                  onChange={(e) => toggleRule({ showTimeouts: e.target.checked })}
-                />
-                {t('setup.switch.timeouts')}
-              </label>
-              <label className="switch">
-                <input
-                  type="checkbox"
-                  checked={draft.rules.showPossession}
-                  onChange={(e) => toggleRule({ showPossession: e.target.checked })}
-                />
-                {t('setup.switch.possession')}
-              </label>
+              {/*
+                篮球专属的开关:进攻钟 / 犯规 / 暂停 / 进攻权。
+                足球没有这些,摆在那儿只会让人以为能勾。
+              */}
+              {football ? null : (
+                <>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={draft.rules.useShotClock}
+                      onChange={(e) => toggleRule({ useShotClock: e.target.checked })}
+                    />
+                    {t('setup.switch.shot')}
+                  </label>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={draft.rules.showTeamFouls}
+                      onChange={(e) => toggleRule({ showTeamFouls: e.target.checked })}
+                    />
+                    {t('setup.switch.fouls')}
+                  </label>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={draft.rules.showTimeouts}
+                      onChange={(e) => toggleRule({ showTimeouts: e.target.checked })}
+                    />
+                    {t('setup.switch.timeouts')}
+                  </label>
+                  <label className="switch">
+                    <input
+                      type="checkbox"
+                      checked={draft.rules.showPossession}
+                      onChange={(e) => toggleRule({ showPossession: e.target.checked })}
+                    />
+                    {t('setup.switch.possession')}
+                  </label>
+                </>
+              )}
               <label className="switch">
                 <input
                   type="checkbox"

@@ -24,10 +24,34 @@ export type AutoFit = 'fit' | 'stretch';
 /**
  * 运动项目。
  *
- * 目前只做了篮球,先把字段和注册表的位置留好 ——
- * 以后加足球/排球,只需要加一个枚举值和一条注册表配置。
+ * 加一个新项目只需要:加一个枚举值 + 在 client/src/lib/sports.ts 里加一条注册表配置。
+ *
+ * - `basketball` 篮球:四节 + 进攻钟 + 暂停 + 全队犯规
+ * - `football`  足球:两半场 + 补时 + 中场休息,**时钟走正数**(00:00 → 45:00)
  */
-export type SportId = 'basketball';
+export type SportId = 'basketball' | 'football';
+
+/** 全部支持的项目(顺序即界面里的显示顺序) */
+export const SPORT_IDS: readonly SportId[] = ['basketball', 'football'];
+
+/** 值是不是一个受支持的项目 */
+export function isSportId(v: unknown): v is SportId {
+  return v === 'basketball' || v === 'football';
+}
+
+/**
+ * 这场比赛是什么项目。
+ *
+ * 老库里没有 `sport` 字段 → 一律按篮球处理,前后端都兼容。
+ */
+export function resolveSport(m: { sport?: SportId | null }): SportId {
+  return isSportId(m.sport) ? m.sport : 'basketball';
+}
+
+/** 这场是不是足球(大屏/控制台按项目分流时用) */
+export function isFootball(m: { sport?: SportId | null }): boolean {
+  return resolveSport(m) === 'football';
+}
 
 /**
  * 界面语言。
@@ -84,6 +108,12 @@ export interface MatchRules {
   showTimeouts: boolean;
   /** 大屏是否显示进攻权箭头 */
   showPossession: boolean;
+  /**
+   * 中场休息时长(分钟)—— 足球专用,默认 15。
+   *
+   * 可选字段:老库里没有这一项,读库时会补上默认值(DEFAULT_HALFTIME_MINUTES)。
+   */
+  halftimeMinutes?: number;
 }
 
 export interface Team {
@@ -133,6 +163,73 @@ export interface ClockAnchor extends TimeAnchor {
 export interface TimeoutAnchor extends TimeAnchor {
   /** 发起暂停的队伍(null = 当前没有暂停在进行) */
   side: Side | null;
+}
+
+/**
+ * 补时计时器(足球专用)。
+ *
+ * 足球的补时是**独立的第二个表**:主钟到 45:00 停表,裁判宣布补时 4 分钟,
+ * 这 4 分钟走的是这个表 —— 它和主钟各走各的,不能混在一个锚点里。
+ *
+ * 模型与比赛钟完全一致(锚点 + 服务端打点),所以断网时照样走秒。
+ */
+export interface AddedTimeAnchor extends TimeAnchor {
+  /** 裁判宣布的补时总时长(ms) */
+  durationMs: number;
+}
+
+/**
+ * 中场休息倒计时(足球专用)。
+ *
+ * **存在即表示处于中场休息** —— 连"刚进中场、倒计时还没开表"的状态也是它
+ * (running=false,remainingMs=总时长)。这样大屏一眼就知道该显示中场休息屏。
+ *
+ * 归零后**绝不自动开始下半场**:倒计时走到 0 只是停下,
+ * 什么时候开下半场由计分员显式按「结束中场休息」。
+ */
+export interface HalftimeAnchor extends TimeAnchor {
+  /** 中场休息总时长(ms) */
+  durationMs: number;
+}
+
+/**
+ * 这份数据是不是一个像样的补时锚点(脏数据要挡住)。
+ *
+ * 读库时用:形状不对的锚点宁可丢掉,也不能让大屏算出一个怪数字。
+ */
+export function isValidAddedTimeAnchor(value: unknown): value is AddedTimeAnchor {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as Partial<AddedTimeAnchor>;
+  return (
+    typeof a.running === 'boolean' &&
+    typeof a.remainingMs === 'number' &&
+    Number.isFinite(a.remainingMs) &&
+    a.remainingMs >= 0 &&
+    typeof a.anchorServerTs === 'number' &&
+    Number.isFinite(a.anchorServerTs) &&
+    a.anchorServerTs >= 0 &&
+    typeof a.durationMs === 'number' &&
+    Number.isFinite(a.durationMs) &&
+    a.durationMs >= 0
+  );
+}
+
+/** 这份数据是不是一个像样的中场休息锚点(脏数据要挡住) */
+export function isValidHalftimeAnchor(value: unknown): value is HalftimeAnchor {
+  if (!value || typeof value !== 'object') return false;
+  const a = value as Partial<HalftimeAnchor>;
+  return (
+    typeof a.running === 'boolean' &&
+    typeof a.remainingMs === 'number' &&
+    Number.isFinite(a.remainingMs) &&
+    a.remainingMs >= 0 &&
+    typeof a.anchorServerTs === 'number' &&
+    Number.isFinite(a.anchorServerTs) &&
+    a.anchorServerTs >= 0 &&
+    typeof a.durationMs === 'number' &&
+    Number.isFinite(a.durationMs) &&
+    a.durationMs >= 0
+  );
 }
 
 export interface Presentation {
@@ -201,6 +298,20 @@ export interface Match {
    * 老客户端不认识它,直接忽略即可,前后端仍然兼容。
    */
   timeout?: TimeoutAnchor;
+  /**
+   * 补时计时器(足球专用,可选)。
+   *
+   * 裁判宣布补时后由计分员设定并开表,和主钟各走各的。
+   * 篮球的比赛没有这个字段,老客户端不认识它,直接忽略即可。
+   */
+  addedTime?: AddedTimeAnchor | null;
+  /**
+   * 中场休息倒计时(足球专用,可选)。
+   *
+   * **存在即表示处于中场休息**(哪怕倒计时还没开表)。
+   * 篮球的比赛没有这个字段,老客户端不认识它,直接忽略即可。
+   */
+  halftime?: HalftimeAnchor | null;
   possession: Possession;
   /**
    * 计划开赛时间(墙钟,`HH:MM`,可选)。
@@ -253,7 +364,7 @@ export interface Match {
  *     "从什么时候开始算"必须由服务端打点,客户端的时钟不可信。
  */
 export interface MatchUpdatePatch
-  extends Partial<Omit<Match, 'home' | 'away' | 'rules' | 'presentation' | 'startCountdown'>> {
+  extends Partial<Omit<Match, 'home' | 'away' | 'rules' | 'presentation' | 'startCountdown' | 'addedTime' | 'halftime'>> {
   home?: Partial<Team>;
   away?: Partial<Team>;
   rules?: Partial<MatchRules>;
@@ -295,6 +406,49 @@ export const DEFAULT_PRESENTATION: Presentation = {
   autoFit: 'fit',
 };
 
+/** 中场休息默认时长(分钟)—— 足球 */
+export const DEFAULT_HALFTIME_MINUTES = 15;
+
+/** 补时上限(秒)—— 30 分钟足够覆盖任何正常的伤停补时 */
+export const MAX_ADDED_TIME_SECONDS = 30 * 60;
+
+/**
+ * 足球的默认规则。
+ *
+ * 两半场 45 分钟,没有进攻钟、没有暂停、没有全队犯规 —— 这些字段仍然存在
+ * (MatchRules 是共用的一个结构),只是关掉而已,大屏按规则决定显不显示。
+ */
+export const DEFAULT_FOOTBALL_RULES: MatchRules = {
+  ...DEFAULT_RULES,
+  periods: 2,
+  periodMinutes: 45,
+  shotClockSeconds: 0,
+  timeoutsPerTeam: 0,
+  bonusFouls: 0,
+  useShotClock: false,
+  showTeamFouls: false,
+  showTimeouts: false,
+  showPossession: false,
+  halftimeMinutes: DEFAULT_HALFTIME_MINUTES,
+};
+
+/**
+ * 按项目取一套默认规则。
+ *
+ * 服务端建赛与客户端建赛表单共用这一份 —— 两边算出来的默认值必须一样,
+ * 否则管理台里显示 2×45、保存后却变成别的。
+ */
+export function defaultRulesFor(sport: SportId): MatchRules {
+  return sport === 'football' ? { ...DEFAULT_FOOTBALL_RULES } : { ...DEFAULT_RULES };
+}
+
+/** 由规则算出中场休息总毫秒 */
+export function halftimeDurationMs(rules: MatchRules): number {
+  const m = Number(rules.halftimeMinutes ?? DEFAULT_HALFTIME_MINUTES);
+  const safe = Number.isFinite(m) && m > 0 ? m : DEFAULT_HALFTIME_MINUTES;
+  return Math.round(safe * 60_000);
+}
+
 export const TEMPLATE_IDS: TemplateId[] = ['simple', 'led', 'broadcast'];
 
 /* ============================ 时钟数学 ============================
@@ -325,12 +479,73 @@ export function formatSeconds(ms: number): string {
   return String(total).padStart(2, '0');
 }
 
-/** 节次标签:Q1..Qn / OT1.. / HT / FINAL */
-export function buildPeriodLabel(period: number, totalPeriods: number, status: MatchStatus): string {
+/**
+ * 节次标签。
+ *
+ * - 篮球:`Q1..Qn` / `OT1..` / `FINAL`
+ * - 足球:`1H` / `2H` / `HT`(中场休息)/ `FT`(全场结束)
+ *
+ * 足球的 `period` 表示"第几个半场"(1 = 上半场,2 = 下半场)。
+ *
+ * `options` 是可选的:不传就按篮球处理(老代码不用改)。
+ */
+export function buildPeriodLabel(
+  period: number,
+  totalPeriods: number,
+  status: MatchStatus,
+  options?: { sport?: SportId | null; halftime?: boolean },
+): string {
+  const sport = resolveSport({ sport: options?.sport });
+  if (sport === 'football') {
+    if (status === 'finished') return 'FT';
+    if (options?.halftime) return 'HT';
+    if (period <= 1) return '1H';
+    return '2H';
+  }
   if (status === 'finished') return 'FINAL';
   if (period <= 0) return 'Q1';
   if (period <= totalPeriods) return `Q${period}`;
   return `OT${period - totalPeriods}`;
+}
+
+/**
+ * 足球的【已用时间】。
+ *
+ * 锚点里存的还是"还剩多少"(和篮球同一个模型),但足球的表是从 00:00 往上走的,
+ * 所以显示值 = 本节总时长 − 剩余。
+ *
+ * 夹在 [0, totalMs] 里:表停了以后剩余不会再变,但如果时钟还在跑而剩余被减成负数
+ * (理论上不该发生),显示值也不会超过本节长度。
+ */
+export function elapsedMs(anchor: TimeAnchor, totalMs: number, serverNow: number): number {
+  const remain = remainingMs(anchor, serverNow);
+  const total = Math.max(0, totalMs);
+  return Math.max(0, Math.min(total, total - remain));
+}
+
+/** 毫秒 → "+04:30"(补时显示,带加号) */
+export function formatAddedTime(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `+${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+/** 足球的比赛阶段 */
+export type FootballPhase = 'first' | 'halftime' | 'second';
+/**
+ * 足球现在是哪个阶段。
+ *
+ * - `halftime`:中场休息锚点存在(哪怕倒计时还没开表)
+ * - `first`   :上半场
+ * - `second`  :下半场
+ */
+export function resolveFootballPhase(m: {
+  period?: number;
+  halftime?: HalftimeAnchor | null;
+}): FootballPhase {
+  if (m.halftime) return 'halftime';
+  return (m.period ?? 1) >= 2 ? 'second' : 'first';
 }
 
 /** 由规则算出单节总毫秒 */
@@ -605,6 +820,13 @@ export type CommandType =
   | 'foul.sub'
   | 'timeout.add'
   | 'timeout.sub'
+  // 足球:半场 / 补时 / 中场休息
+  | 'half.end'
+  | 'addedTime.set'
+  | 'addedTime.toggle'
+  | 'halftime.start'
+  | 'halftime.toggle'
+  | 'halftime.end'
   // 暂停倒计时(请求暂停 → 大屏倒计时 → 结束暂停)
   | 'timeout.request'
   | 'timeout.end'
@@ -667,6 +889,35 @@ export interface CommandPayloadMap {
   'timeout.request': { side: Side };
   /** 结束暂停:撤下大屏倒计时(不自动恢复比赛钟) */
   'timeout.end': Record<string, never>;
+  /**
+   * 结束上半场(足球)。
+   *
+   * 主钟停表并停在 45:00 —— 足球的表是往上走的,到点就是 45:00。
+   * **不自动进中场**:裁判可能还要宣布补时,那要走「设补时」。
+   */
+  'half.end': Record<string, never>;
+  /**
+   * 设补时(足球)。
+   *
+   * - `seconds`:补时多少秒(0 表示清除补时;上限 30 分钟)
+   * - `start`  :设完是否直接开表(默认 false)
+   *
+   * 补时走的是**独立的第二个表**,和主钟各走各的。
+   */
+  'addedTime.set': { seconds: number; start?: boolean };
+  /** 补时开/停(足球) */
+  'addedTime.toggle': Record<string, never>;
+  /**
+   * 开始中场休息(足球)。
+   *
+   * 第一次按 = 进入中场休息并开倒计时;
+   * 已经在中场时按 = 把倒计时(重新)开起来。
+   */
+  'halftime.start': Record<string, never>;
+  /** 中场倒计时暂停/继续(足球) */
+  'halftime.toggle': Record<string, never>;
+  /** 结束中场休息 → 进入下半场(主钟停着,等计分员按开始) */
+  'halftime.end': Record<string, never>;
   'possession.set': { side: Possession };
   'match.status': { status: MatchStatus };
   'match.update': { patch: MatchUpdatePatch };
