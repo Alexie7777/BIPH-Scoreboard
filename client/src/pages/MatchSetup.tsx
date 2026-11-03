@@ -232,6 +232,8 @@ export default function MatchSetup() {
   // 本机没有令牌,拼出来的链接缺 ?t=,计分员扫码后连不上。
   const [controlLink, setControlLink] = useState<string | null>(null);
   const [displayLink, setDisplayLink] = useState<string | null>(null);
+  // OBS 浏览器源地址(服务端按请求 Host 拼的权威地址)
+  const [overlayLink, setOverlayLink] = useState<string | null>(null);
   // 本场控制令牌(二维码接口顺带返回):改配置用它,不需要管理员密钥
   const [qrToken, setQrToken] = useState<string | null>(null);
   // **服务端已保存**的界面语言。
@@ -318,6 +320,8 @@ export default function MatchSetup() {
           setControlLink(c.url ?? null);
           setDisplayLink(d.url ?? null);
           setQrToken(c.token ?? null);
+          // OBS 浏览器源地址:服务端按请求 Host 拼的权威地址,优先用
+          setOverlayLink(c.overlayUrl ?? d.overlayUrl ?? null);
         }
       } catch {
         if (!cancelled) {
@@ -325,6 +329,7 @@ export default function MatchSetup() {
           setDisplayQr(null);
           setControlLink(null);
           setDisplayLink(null);
+          setOverlayLink(null);
         }
       }
     };
@@ -346,13 +351,13 @@ export default function MatchSetup() {
   /*
    * OBS 浏览器源地址。
    *
-   * 叠加层是只读公开的(和大屏一样,不要令牌),所以服务端 QR 接口不提供它,
-   * 这里按本机看到的地址拼 —— 前提是这个页面是从服务器的局域网地址打开的,
-   * 否则拼出来的是 localhost,贴到 OBS 里连不上(和大屏链接同一个道理)。
+   * 优先用服务端给的(它按请求 Host 拼,知道自己对外是哪个地址);
+   * 拿不到才退回本机拼装 —— 那种情况下只能在本机浏览器里看,
+   * 贴到 OBS 里会连不上(和大屏链接同一个道理)。
    */
   const overlayUrl = useMemo(
-    () => buildOverlayUrl(matchId, serverLocale),
-    [matchId, serverLocale],
+    () => overlayLink ?? buildOverlayUrl(matchId, serverLocale),
+    [overlayLink, matchId, serverLocale],
   );
 
   function patchTeam(side: 'home' | 'away', patch: Partial<Team>) {

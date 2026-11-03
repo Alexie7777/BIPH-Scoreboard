@@ -157,6 +157,13 @@ export interface QrResponse {
   url: string;
   role: 'control' | 'display';
   token?: string;
+  /**
+   * OBS 浏览器源地址(叠加层),服务端按请求 Host 拼的权威地址。
+   *
+   * 叠加层是公开只读的(不要令牌),但地址仍由服务端给 ——
+   * 万一有人从 `localhost` 打开配置页,本机拼出来的地址贴到 OBS 里是连不上的。
+   */
+  overlayUrl?: string;
 }
 
 export interface MatchLogsResponse {

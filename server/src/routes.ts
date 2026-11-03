@@ -334,8 +334,21 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
           ? withLang(`${base}/m/${match.id}/display`, match.presentation.locale)
           : withLang(`${base}/m/${match.id}/control?t=${t.operatorToken}`, match.presentation.locale);
       const dataUrl = await QRCode.toDataURL(url, { width: 512, margin: 1 });
+      /*
+       * OBS 浏览器源地址(叠加层)。
+       *
+       * 叠加层是公开只读的(不要令牌),但地址同样由服务端按请求 Host 拼 ——
+       * 有人从 localhost 打开配置页时,前端自己拼出来的地址贴进 OBS 是连不上的。
+       */
+      const overlayUrl = withLang(`${base}/m/${match.id}/overlay`, match.presentation.locale);
       // 顺带把控制令牌明文给出:配置页要靠它保存本场参数(改配置不需要管理员密钥)
-      return { dataUrl, url, role, token: role === 'control' ? t.operatorToken : undefined };
+      return {
+        dataUrl,
+        url,
+        role,
+        token: role === 'control' ? t.operatorToken : undefined,
+        overlayUrl,
+      };
     },
   );
 
