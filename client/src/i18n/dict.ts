@@ -113,6 +113,8 @@ export const zhCN = {
   'control.final': '置 FINAL',
   'control.display': '大屏',
   'control.display.title': '在新窗口打开大屏',
+  'control.overlay': 'OBS',
+  'control.overlay.title': '复制 OBS 浏览器源地址(叠加层)',
   'control.timeout.urgent': '暂停倒计时 {n} 秒后结束',
   'control.timeout.ended': '暂停时间结束,请准备开赛',
   'control.clock.title': '服务器当前时间',
@@ -396,6 +398,7 @@ export const zhCN = {
   'overlay.open': '打开叠加层',
   'overlay.connecting': '正在连接…',
   'overlay.url': '浏览器源地址',
+  'overlay.copied': 'OBS 浏览器源地址已复制,粘贴到 OBS 的「浏览器源」里即可',
 
   /* ------------------------------ 对比度提示 ------------------------------ */
   'contrast.invalid': '颜色格式无法识别',
@@ -532,6 +535,8 @@ export const enUS: Record<MessageKey, string> = {
   'control.final': 'Set FINAL',
   'control.display': 'Big Screen',
   'control.display.title': 'Open the big screen in a new window',
+  'control.overlay': 'OBS',
+  'control.overlay.title': 'Copy the OBS browser-source URL (overlay)',
   'control.timeout.urgent': 'Timeout ends in {n}s',
   'control.timeout.ended': 'Timeout over — get ready to resume play',
   'control.clock.title': 'Server time',
@@ -826,6 +831,7 @@ export const enUS: Record<MessageKey, string> = {
   'overlay.open': 'Open overlay',
   'overlay.connecting': 'Connecting…',
   'overlay.url': 'Browser source URL',
+  'overlay.copied': 'OBS browser-source URL copied — paste it into an OBS browser source',
 
   /* ------------------------------ 对比度提示 ------------------------------ */
   'contrast.invalid': 'Unrecognised colour format',

@@ -12,6 +12,7 @@ import { DEFAULT_HALFTIME_MINUTES, DEFAULT_TIMEOUT_SECONDS, SPORT_IDS, defaultRu
 import {
   buildControlUrl,
   buildDisplayUrl,
+  buildOverlayUrl,
   captureTokens,
   deleteMatch,
   getAdminKey,
@@ -341,6 +342,17 @@ export default function MatchSetup() {
   const displayUrl = useMemo(
     () => displayLink ?? buildDisplayUrl(matchId, serverLocale),
     [displayLink, matchId, serverLocale],
+  );
+  /*
+   * OBS 浏览器源地址。
+   *
+   * 叠加层是只读公开的(和大屏一样,不要令牌),所以服务端 QR 接口不提供它,
+   * 这里按本机看到的地址拼 —— 前提是这个页面是从服务器的局域网地址打开的,
+   * 否则拼出来的是 localhost,贴到 OBS 里连不上(和大屏链接同一个道理)。
+   */
+  const overlayUrl = useMemo(
+    () => buildOverlayUrl(matchId, serverLocale),
+    [matchId, serverLocale],
   );
 
   function patchTeam(side: 'home' | 'away', patch: Partial<Team>) {
@@ -741,6 +753,14 @@ export default function MatchSetup() {
           onClick={() => window.open(displayUrl, '_blank', 'noopener')}
         >
           <IconExternal size={16} /> {t('setup.display')}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => window.open(overlayUrl, '_blank', 'noopener')}
+          title={t('overlay.hint')}
+        >
+          <IconExternal size={16} /> {t('overlay.title')}
         </button>
         <LanguageToggle />
         {/* 保存状态:常驻顶栏,滚到页面下方也看得见 */}
@@ -1219,6 +1239,26 @@ export default function MatchSetup() {
                   </button>
                 </div>
                 <span className="hint">{t('setup.tokens.displayHint')}</span>
+
+                {/*
+                 * OBS 浏览器源地址。
+                 *
+                 * 贴进 OBS 的「浏览器源」就完事了:画面透明,记分条贴左下角。
+                 * 单独一格放 —— 它和大屏链接是两回事(大屏是给现场大屏设备开的,
+                 * 叠加层是给推流电脑上的 OBS 开的),混在一起会以为是一回事。
+                 */}
+                <div className="token-link" style={{ marginTop: 10 }}>
+                  <code>{overlayUrl}</code>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title={t('overlay.url')}
+                    onClick={() => void copy(overlayUrl)}
+                  >
+                    <IconCopy size={16} />
+                  </button>
+                </div>
+                <span className="hint">{t('overlay.hint')}</span>
               </div>
             </div>
           </div>

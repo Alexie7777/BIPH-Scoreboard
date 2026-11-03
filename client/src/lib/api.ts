@@ -371,5 +371,18 @@ export function buildDisplayUrl(matchId: string, locale?: Locale | null): string
   return withLangParam(base, locale ?? null);
 }
 
+/**
+ * 构造 OBS 浏览器源地址。
+ *
+ * 叠加层是**只读公开**的(和大屏一样,不需要令牌):拿这个地址贴进 OBS 的
+ * 「浏览器源」,画面就透明了,只浮着一条贴左下角的记分条。
+ *
+ * 带语言参数:扫出来/复制过去就是本场设置的语言,不用再手动切。
+ */
+export function buildOverlayUrl(matchId: string, locale?: Locale | null): string {
+  const base = `${window.location.origin}/m/${encodeURIComponent(matchId)}/overlay`;
+  return withLangParam(base, locale ?? null);
+}
+
 /** 配置页保存时用到的 presentation 片段 */
 export type { Presentation };

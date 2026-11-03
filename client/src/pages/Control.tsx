@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { isFootball, DEFAULT_HALFTIME_MINUTES, type Locale, type Side } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
-import { estimatedServerNow, getQr, readStoredTokens, writeStoredTokens } from '../lib/api';
+import { buildOverlayUrl, estimatedServerNow, getQr, readStoredTokens, writeStoredTokens } from '../lib/api';
 import { formatClock, formatSeconds, periodDurationMs, remainingMs, resolveFootballPhase } from '../lib/format';
 import { useMatch } from '../lib/useMatch';
 import { useTicker } from '../lib/useTicker';
@@ -320,6 +320,27 @@ export default function Control() {
 
   const controlUrl = useMemo(() => `${window.location.origin}/m/${matchId}/control`, [matchId]);
 
+  /*
+   * 复制 OBS 浏览器源地址。
+   *
+   * 现场要推流时,导播在 OBS 里加一个「浏览器源」,地址就是这条。
+   * 叠加层是只读公开的(不要令牌),所以地址直接拼就行。
+   * 复制成功给条提示 —— 不然按完不知道到底复制上没有(剪贴板在 iPad 上
+   * 有时会静默失败)。
+   */
+  const overlayUrl = useMemo(() => buildOverlayUrl(matchId, locale), [matchId, locale]);
+  const copyOverlayLink = useCallback(() => {
+    const done = () => pushToast(t('overlay.copied'), 'ok');
+    if (!navigator.clipboard?.writeText) {
+      // 没有剪贴板权限(iPad 上偶发):退回到手动复制,别让按钮"按了没反应"
+      window.prompt(t('overlay.url'), overlayUrl);
+      return;
+    }
+    navigator.clipboard.writeText(overlayUrl).then(done).catch(() => {
+      window.prompt(t('overlay.url'), overlayUrl);
+    });
+  }, [overlayUrl, pushToast, t]);
+
   /**
    * 切换语言:本机立刻生效(由 LanguageToggle 内部完成),
    * 同时把语言写进本场配置 —— 服务端广播后大屏会跟着切。
@@ -600,6 +621,16 @@ export default function Control() {
         >
           <IconExternal size={22} />
           <span>{t('control.display')}</span>
+        </button>
+
+        <button
+          type="button"
+          className="act"
+          onClick={copyOverlayLink}
+          title={t('control.overlay.title')}
+        >
+          <IconExternal size={22} />
+          <span>{t('control.overlay')}</span>
         </button>
 
         {/* 语言切换:切了以后大屏会跟着切(语言写进本场配置,服务端广播) */}
