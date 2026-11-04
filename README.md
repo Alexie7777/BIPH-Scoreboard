@@ -509,7 +509,7 @@ BIPH-Scoreboard/
 ├── scripts/make-icons.mjs  从一张源 PNG 生成各尺寸图标(纯 Node,零依赖)
 ├── scripts/package-image.mjs  打包离线部署包(镜像 tar + compose + 部署说明)
 ├── scripts/deploy.sh       服务器端一键更新(拉代码 → 重建镜像 → 重启)
-├── docs/REQUIREMENTS.md    需求分析文档 v0.23
+├── docs/REQUIREMENTS.md    需求分析文档 v0.25
 ├── docs/DEPLOY.md          打包与部署手册(离线部署 / 备份 / 迁移 / 排障)
 └── docs/scoreboard-analysis.html   可视化分析页
 ```
