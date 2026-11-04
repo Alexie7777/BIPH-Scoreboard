@@ -10,6 +10,7 @@ import {
   isValidAddedTimeAnchor,
   isValidHalftimeAnchor,
   isValidStartCountdownAnchor,
+  shotClockEnabled,
   type ClientMsg,
   type CommandType,
   type Locale,
@@ -530,7 +531,26 @@ export class Hub {
           this.broadcast(matchId, { t: 'event', kind: 'clockZero', at: now });
         }
       }
-      if (rt.lastShotRemaining > 0 && shotRem === 0) {
+      /*
+       * 本场不用进攻钟 → 进攻钟不该还在跑。
+       *
+       * 取消勾选的那一刻一般已经把它停住了(见 match.update / REST PATCH),
+       * 但老库里可能有"规则写着不用、锚点却还在跑"这种状态
+       * (比如规则是手改的、或者比赛是从旧版本迁过来的)。
+       * 留着它在跑,它归零时就会被判成「24 秒违例」——
+       * 那正是"明明关掉了还是响违例"的现场现象。
+       */
+      if (!shotClockEnabled(rt.match) && rt.match.shotClock.running) {
+        rt.match = {
+          ...rt.match,
+          shotClock: pauseShotClock(rt.match.shotClock, now),
+          seq: rt.match.seq + 1,
+          updatedAt: now,
+        };
+        this.persist(rt);
+        this.broadcastState(matchId);
+      }
+      if (shotClockEnabled(rt.match) && rt.lastShotRemaining > 0 && shotRem === 0) {
         /*
          * 24 秒违例 —— 进攻钟归零的那一刻自动做三件事:
          *   1) 停比赛钟(球权要转移,表不能继续跑)

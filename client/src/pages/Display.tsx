@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import type { Match, StartMode } from '@biph/shared';
+import { shotClockEnabled } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { setVenueLocaleRemote } from '../lib/api';
 import { formatClock, formatSeconds, remainingMs, resolveStartDisplay } from '../lib/format';
@@ -155,7 +156,7 @@ export default function Display() {
     prevClockRef.current = c;
 
     const ps = prevShotRef.current;
-    if (ps !== null && ps > 0 && s <= 0 && m.rules.useShotClock && soundOn) {
+    if (ps !== null && ps > 0 && s <= 0 && shotClockEnabled(m) && soundOn) {
       // 进攻钟归零 = 违例,短促一声
       buzzerRef.current?.buzz('short');
     }

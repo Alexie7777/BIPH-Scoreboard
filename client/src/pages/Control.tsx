@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { isFootball, DEFAULT_HALFTIME_MINUTES, type Locale, type Side } from '@biph/shared';
+import { isFootball, shotClockEnabled, DEFAULT_HALFTIME_MINUTES, type Locale, type Side } from '@biph/shared';
 import { createBuzzer } from '../lib/audio';
 import { buildOverlayUrl, estimatedServerNow, getQr, readStoredTokens, writeStoredTokens } from '../lib/api';
 import { formatClock, formatSeconds, periodDurationMs, remainingMs, resolveFootballPhase } from '../lib/format';
@@ -435,7 +435,7 @@ export default function Control() {
   const { rules, home, away } = match;
   // 足球与篮球是两套控件:进攻钟、犯规、暂停在足球里一个都用不上。
   const football = isFootball(match);
-  const shotVisible = rules.useShotClock && !football;
+  const shotVisible = shotClockEnabled(match) && !football;
   // 暂停进行中:大屏上正跑着倒计时
   const timeoutRunning = !!match.timeout?.running;
   const timeoutSide = match.timeout?.side ?? null;

@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SPORT_IDS, defaultRulesFor, type Locale, type Match, type MatchHealth, type SportId } from '@biph/shared';
+import { SPORT_IDS, defaultRulesFor, shotClockEnabled, type Locale, type Match, type MatchHealth, type SportId } from '@biph/shared';
 import {
   captureTokens,
   createMatch,
@@ -332,7 +332,7 @@ export default function Dashboard() {
 
                   <div className="clock-row">
                     <span className={urgent ? 'clock urgent' : 'clock'}>{time}</span>
-                    {m.rules.useShotClock ? (
+                    {shotClockEnabled(m) ? (
                       <span className="badge">
                         {t('dashboard.shotClock')}{' '}
                         {m.shotClock.running ? t('dashboard.shotRunning') : t('dashboard.shotStopped')}

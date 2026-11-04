@@ -10,6 +10,7 @@ import {
   isSportId,
   isValidStartMode,
   resolveSport,
+  shotClockEnabled,
   isValidStartTime,
   parseRole,
   type CreateMatchRequest,
@@ -19,7 +20,7 @@ import {
   type Team,
 } from '@biph/shared';
 import { config, paths } from './config.js';
-import { serverNow } from './clock.js';
+import { currentRemaining, serverNow } from './clock.js';
 import { mergeTeamConfig } from './match.js';
 import type { Hub } from './hub.js';
 import type { Store } from './db.js';
@@ -274,9 +275,25 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
             halftime: !!current.halftime,
           }),
         },
-        // 换成足球就没有进攻钟了,顺手把它停住(不然会留着一个还在跑的表)
+        /*
+         * 进攻钟:
+         *  ① 换成足球 → 没有进攻钟了,顺手停住(不然会留着一个还在跑的表);
+         *  ② **取消勾选「使用进攻钟」→ 同样要停住**。
+         *     早先只处理了 ①,于是校赛关掉进攻钟之后它还在倒数,
+         *     归零被服务端判成「24 秒违例」→ 停比赛钟 + 大屏红闪长鸣。
+         *     停住时把剩余值算准(锚点里存的是"锚点时刻"的剩余)。
+         */
         shotClock:
-          nextSport !== currentSport ? { ...current.shotClock, running: false } : current.shotClock,
+          nextSport !== currentSport
+            ? { ...current.shotClock, running: false }
+            : !shotClockEnabled({ rules: nextRules }) && current.shotClock.running
+              ? {
+                  ...current.shotClock,
+                  remainingMs: currentRemaining(current.shotClock, now),
+                  running: false,
+                  anchorServerTs: now,
+                }
+              : current.shotClock,
         // 暂停倒计时同样只认命令通道(timeout.request / timeout.end)
         timeout: current.timeout,
         // 足球的补时与中场休息也只认命令通道

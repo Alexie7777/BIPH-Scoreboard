@@ -1165,3 +1165,117 @@ describe('端到端:足球', () => {
     control.close();
   });
 });
+
+/* ============================================================================
+ * 端到端:取消勾选「使用进攻钟」
+ *
+ * 现场事故的完整复刻(2026-11-03 反馈):
+ *   校赛不打 24 秒 → 计分员在配置页取消勾选「使用进攻钟」
+ *   → 进攻钟的锚点照旧在跑 → 归零 → 服务端判成「24 秒违例」
+ *   → 停比赛钟 + 大屏整屏红闪长鸣 + 控制台弹红字
+ *
+ * 现场看到的现象就是"明明把进攻钟关了,还是响了一声违例"。
+ *
+ * 这一组走的是**配置页真正走的那条路**(REST PATCH /api/matches/:id)。
+ * ========================================================================== */
+describe('端到端:取消勾选「使用进攻钟」', () => {
+  let matchId: string;
+  let controlToken: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${BASE}/api/matches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '不打24秒的校赛',
+        homeName: '甲队',
+        awayName: '乙队',
+        court: '2',
+        rules: { periods: 4, periodMinutes: 8, shotClockSeconds: 24, useShotClock: true },
+      }),
+    });
+    const created = (await res.json()) as { match: Match; operatorToken: string };
+    matchId = created.match.id;
+    controlToken = created.operatorToken;
+  }, 60_000);
+
+  it('取消勾选 → 进攻钟停住,归零也不会被判成违例', async () => {
+    const display = await connect(matchId, 'display');
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => display.match !== null && control.match !== null);
+
+    // 开球:比赛钟与进攻钟一起走
+    control.send({ t: 'cmd', cmdId: 's1', type: 'clock.start', payload: {} });
+    await until(() => display.match?.shotClock.running === true);
+
+    // 把进攻钟拨到 2 秒 —— 它马上就要归零了
+    control.send({ t: 'cmd', cmdId: 's2', type: 'shot.set', payload: { ms: 2000 } });
+    await until(() => display.match?.shotClock.remainingMs === 2000);
+
+    // 配置页取消勾选「使用进攻钟」(走 REST PATCH,和配置页同一个接口)
+    const res = await fetch(`${BASE}/api/matches/${matchId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-control-token': controlToken },
+      body: JSON.stringify({ rules: { useShotClock: false } }),
+    });
+    expect(res.status).toBe(200);
+
+    // 进攻钟立刻停住
+    await until(() => display.match?.rules.useShotClock === false);
+    await until(() => display.match?.shotClock.running === false);
+
+    // 比赛钟还在跑(取消进攻钟不该动比赛钟)
+    expect(display.match?.clock.running).toBe(true);
+
+    // 等它原本该归零的时刻过去 —— 不能出现违例
+    await sleep(3000);
+    const violations = display.messages.filter(
+      (m) => m.t === 'event' && m.kind === 'shotClockZero',
+    );
+    expect(violations.length).toBe(0);
+    // 比赛钟没被停掉(违例会停它)
+    expect(display.match?.clock.running).toBe(true);
+
+    const logs = await (await fetch(`${BASE}/api/matches/${matchId}/logs`)).json() as {
+      logs?: { message: string }[];
+    };
+    expect((logs.logs ?? []).map((l) => l.message).join('\n')).not.toContain('24 秒违例');
+
+    display.close();
+    control.close();
+  });
+
+  it('取消勾选之后再按「开始比赛」→ 进攻钟不会被带起来', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 's3', type: 'clock.pause', payload: {} });
+    await until(() => control.match?.clock.running === false);
+    control.send({ t: 'cmd', cmdId: 's4', type: 'clock.toggle', payload: {} });
+    await until(() => control.match?.clock.running === true);
+
+    // 关键断言:进攻钟没有跟着起来
+    expect(control.match?.rules.useShotClock).toBe(false);
+    expect(control.match?.shotClock.running).toBe(false);
+
+    control.close();
+  });
+
+  it('进攻钟的命令被服务端拒绝(不靠界面藏按钮)', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    const acks: { ok: boolean; error?: string }[] = [];
+    control.ws.on('message', (raw) => {
+      const msg = JSON.parse(raw.toString()) as { t: string; ok?: boolean; error?: string };
+      if (msg.t === 'ack') acks.push({ ok: msg.ok ?? false, error: msg.error });
+    });
+
+    control.send({ t: 'cmd', cmdId: 's5', type: 'shot.start', payload: {} });
+    await until(() => acks.length > 0);
+    expect(acks[0].ok).toBe(false);
+    expect(acks[0].error).toContain('进攻钟');
+
+    control.close();
+  });
+});

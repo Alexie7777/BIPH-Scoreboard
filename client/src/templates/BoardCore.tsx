@@ -8,7 +8,7 @@
  * 整块画布由 Display 页统一 scale。
  */
 import type { Match, StartMode } from '@biph/shared';
-import { isFootball } from '@biph/shared';
+import { isFootball, shotClockEnabled } from '@biph/shared';
 import { cssVars } from '../lib/cssVars';
 import { readableAccent } from '../lib/colors';
 import { formatClock, formatSeconds, periodDurationMs } from '../lib/format';
@@ -73,7 +73,7 @@ export function BoardCore({
 
   const title = presentation.titleText || match.name;
   const showSponsor = !!(presentation.sponsorName || presentation.sponsorText);
-  const showShot = rules.useShotClock;
+  const showShot = shotClockEnabled(match);
   const shotLow = shotRemainingMs > 0 && shotRemainingMs <= 5_000;
 
   /*

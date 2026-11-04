@@ -14,6 +14,7 @@ import {
   periodDurationMs,
   resolveSport,
   shotClockDurationMs,
+  shotClockEnabled,
   type CommandType,
   type CreateMatchRequest,
   type EventKind,
@@ -231,6 +232,18 @@ function setSide(m: Match, side: Side, patch: Partial<Team>): void {
  *    表会"顿"一下,现场看得出来。
  */
 function followShotClock(m: Match, now: number, tipOff: boolean): void {
+  /*
+   * 本场不使用进攻钟 → 进攻钟不许被带起来。
+   *
+   * 校赛不打 24 秒时,计分员会在配置页取消勾选「使用进攻钟」。
+   * 早先这里完全不看这个标志位:取消勾选之后,再按一次「开始比赛」,
+   * 进攻钟照样满 24 秒跑起来,归零又被判成「24 秒违例」——
+   * 现场看到的就是"明明关掉了,表还在响"。
+   */
+  if (!shotClockEnabled(m)) {
+    m.shotClock = pauseShotClock(m.shotClock, now);
+    return;
+  }
   if (tipOff || currentRemaining(m.shotClock, now) <= 0) {
     m.shotClock = resetShotClock(m.shotClock, m.rules, now, true);
     return;
@@ -393,8 +406,19 @@ export function applyCommand(
         break;
       }
       m.clock = resetClock(m.clock, m.rules, m.status, now);
-      m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
-      log = '比赛钟与进攻钟已重置';
+      /*
+       * 不使用进攻钟时不去动它的锚点。
+       *
+       * 复位进攻钟用的是规则里的 `shotClockSeconds`;校赛不打 24 秒时
+       * 这个值常常是 0,复位出来的锚点 remainingMs=0 —— 那会让服务端的
+       * 归零检测误以为"进攻钟刚归零",凭空判一次违例。
+       */
+      if (shotClockEnabled(m)) {
+        m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
+        log = '比赛钟与进攻钟已重置';
+      } else {
+        log = '比赛钟已重置';
+      }
       break;
     }
     case 'clock.nextPeriod': {
@@ -414,7 +438,10 @@ export function applyCommand(
       m.clock = setPeriod(m.clock, next, m.rules, m.status, now);
       // 新节次是跳球开球:进攻钟复位到 24(停着),
       // 等计分员按「开始」时两个钟一起走
-      m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
+      // (本场不用进攻钟时不复位 —— 复位出来的剩余值可能是 0,会被误判成归零)
+      if (shotClockEnabled(m)) {
+        m.shotClock = resetShotClock(m.shotClock, m.rules, now, false);
+      }
       log = `进入 ${m.clock.periodLabel}`;
       events.push({ kind: 'periodEnd' });
       break;
@@ -783,6 +810,20 @@ export function applyCommand(
       }
       // 规则变化后,节次标签要跟着重算
       relabel(next);
+      /*
+       * 取消勾选「使用进攻钟」→ **立刻把还在跑的进攻钟停住**。
+       *
+       * 早先这里只改了规则里的标志位,进攻钟的锚点照旧在跑:
+       * 界面上进攻钟面板没了(客户端按标志位藏的),可服务端那边它还在倒数,
+       * 十几秒后归零 → 判成「24 秒违例」→ 停比赛钟 + 大屏整屏红闪长鸣。
+       * 现场看到的现象就是"明明把进攻钟关了,还是响了一声违例"。
+       *
+       * 停住时保留当前剩余值(不算成 0):重新勾选回来还能接着用,
+       * 要满表起步由计分员按「重置并开表」决定。
+       */
+      if (!shotClockEnabled(next) && next.shotClock.running) {
+        next.shotClock = pauseShotClock(next.shotClock, now);
+      }
       log = '更新比赛配置';
       m = next;
       break;
@@ -828,6 +869,22 @@ export function rejectReason(
   const team = side === 'home' ? m.home : m.away;
 
   switch (type) {
+    /*
+     * 本场不用进攻钟 → 进攻钟的命令一律拒掉。
+     *
+     * 界面上进攻钟面板已经藏起来了,正常不会有人按到;
+     * 但服务端也得有自己的判断 —— 命令通道是公开的(拿控制令牌就能发),
+     * 而且"按错了还给个绿灯"比"直接拒掉"糟得多。
+     */
+    case 'shot.start':
+    case 'shot.pause':
+    case 'shot.toggle':
+    case 'shot.adjust':
+    case 'shot.set':
+    case 'shot.reset':
+    case 'shot.violation':
+      if (!shotClockEnabled(m)) return '本场不使用进攻钟';
+      return null;
     case 'timeout.request':
       // 已经有暂停在进行:不重复计时(队卡上的按钮此时是禁用的,这里只是兜底)
       if (m.timeout?.running) return '暂停进行中';

@@ -1048,6 +1048,7 @@ export default function MatchSetup() {
                 <>
                   <label className="switch">
                     <input
+                      id="use-shot-clock"
                       type="checkbox"
                       checked={draft.rules.useShotClock}
                       onChange={(e) => toggleRule({ useShotClock: e.target.checked })}

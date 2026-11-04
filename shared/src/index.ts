@@ -449,6 +449,20 @@ export function halftimeDurationMs(rules: MatchRules): number {
   return Math.round(safe * 60_000);
 }
 
+/**
+ * 本场是否使用进攻钟。
+ *
+ * **服务端与客户端必须用同一个判定**,否则会出现最尴尬的那种局面:
+ * 服务端以为进攻钟开着、归零了判成「24 秒违例」(停比赛钟 + 大屏红闪长鸣),
+ * 客户端以为进攻钟关着、把整个进攻钟面板藏起来 —— 现场只看到"表莫名其妙停了"。
+ *
+ * 用 `!== false` 而不是直接取布尔值:老库里万一有比赛缺这个字段,
+ * 按"用"处理(宁可多显示一个表,也不能出现"看不见却还在判罚")。
+ */
+export function shotClockEnabled(m: { rules?: { useShotClock?: boolean } | null }): boolean {
+  return m.rules?.useShotClock !== false;
+}
+
 export const TEMPLATE_IDS: TemplateId[] = ['simple', 'led', 'broadcast'];
 
 /* ============================ 时钟数学 ============================
