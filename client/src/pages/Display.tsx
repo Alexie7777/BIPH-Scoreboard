@@ -25,6 +25,7 @@ import { useTicker } from '../lib/useTicker';
 import { setScopedLocale, useI18n } from '../i18n';
 import { LanguageToggle } from '../components/LanguageToggle';
 import { BroadcastBoard } from '../templates/BroadcastBoard';
+import { BibaBoard } from '../templates/BibaBoard';
 import { LedBoard } from '../templates/LedBoard';
 import { SimpleBoard } from '../templates/SimpleBoard';
 
@@ -236,6 +237,7 @@ export default function Display() {
     };
     if (template === 'led') return <LedBoard {...props} />;
     if (template === 'broadcast') return <BroadcastBoard {...props} />;
+    if (template === 'biba') return <BibaBoard {...props} />;
     return <SimpleBoard {...props} />;
   }, [match, clockMs, shotMs, timeoutMs, startMs, addedMs, halftimeMs, startOn, startMode, offline, stretch, template]);
 

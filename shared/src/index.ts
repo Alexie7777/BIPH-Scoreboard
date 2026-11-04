@@ -18,7 +18,17 @@
 export type MatchStatus = 'scheduled' | 'live' | 'finished';
 export type Side = 'home' | 'away';
 export type Possession = Side | null;
-export type TemplateId = 'simple' | 'led' | 'broadcast';
+/**
+ * 大屏模板。
+ *
+ * - simple    : 简洁大比分(校赛最常用)
+ * - led       : 复古 LED
+ * - broadcast : 现代转播
+ * - biba      : 总决赛(电竞风)—— 中央竖排主视觉,两侧插画,比分在中间
+ *
+ * 新增模板只加值、不改已有值,老库里存着的旧模板 id 照旧认。
+ */
+export type TemplateId = 'simple' | 'led' | 'broadcast' | 'biba';
 export type AutoFit = 'fit' | 'stretch';
 
 /**
@@ -482,7 +492,7 @@ export function canTurnOnShotClock(opts: { clockRunning: boolean; useShotClock: 
   return !(opts.clockRunning && !opts.useShotClock);
 }
 
-export const TEMPLATE_IDS: TemplateId[] = ['simple', 'led', 'broadcast'];
+export const TEMPLATE_IDS: TemplateId[] = ['simple', 'led', 'broadcast', 'biba'];
 
 /* ============================ 时钟数学 ============================
  * 以下函数由服务端与客户端【共用同一份实现】,保证两侧算法一致。

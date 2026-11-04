@@ -1147,6 +1147,7 @@ export default function MatchSetup() {
                 <option value="simple">{t('setup.display.template.simple')}</option>
                 <option value="led">{t('setup.display.template.led')}</option>
                 <option value="broadcast">{t('setup.display.template.broadcast')}</option>
+                <option value="biba">{t('setup.display.template.biba')}</option>
               </select>
             </div>
             <div className="field">
