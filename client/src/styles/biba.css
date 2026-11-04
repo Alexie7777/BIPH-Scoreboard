@@ -1,28 +1,32 @@
 /* ============================================================
    总决赛大屏(电竞风)模板 —— tpl-biba
    ------------------------------------------------------------
-   版式照着 BIBA SEMIFINALS 的转播画面做的:
+   版式(1920×1080 设计画布):
 
-        顶栏:赛事名(左) + 场馆/赞助(右)
-        中央竖排:皇冠 + 笔刷字 → 金框比赛钟 → 蓝/金两个比分框
-        两侧:主队插画(蓝) / 客队插画(金) + 队名 + 队色横条
-        底栏:犯规 / 暂停
-
-   所有尺寸都是 1920×1080 设计画布里的 px,整块画布由 Display 页统一 scale。
+        y   0 ┌ 皇冠 / 场馆名 / 赛事名(金黄,两侧带横线)
+        y 240 ├ MEGS   vs   ORCAS            ← 对阵行,两队各用队色
+        y 370 ├ ╔══════════╗               ← 金色斜切框:比赛钟 + 节次
+        y 570 ├ MEGALODONS ╔════╗ ╔════╗ ORCAS
+             │ MEGS       ║ 0  ║:║ 0  ║ ORCAS
+             │ ~~~~~~~    ╚════╝ ╚════╝ ~~~~~~~
+        y 925 ├ ───────────────────────────────────
+             │  MEGS FOULS 0 TIMEOUTS 4/4 │ ORCAS …
+             └
 
    插画是本地素材(public/biba-*.jpg|png),不联网:
-   两侧插画用 screen 混合模式叠在深底上,画面里本来就黑的地方自然透掉,
-   靠中心那一侧再用遮罩淡出,免得切出一条硬边。
+   两侧插画用 screen 混合叠在深底上,画面本来就黑的地方自然透掉,
+   边缘的渐隐是**烤进图片**的(像素乘暗 = 淡出),不挑浏览器版本。
    ============================================================ */
 
 .tpl-biba {
-  --biba-blue: #2ea3ff;
-  --biba-gold: #ffc400;
+  --biba-home: #ff45a8;
+  --biba-away: #22d9f0;
+  --biba-gold: #fce87a;
   --biba-fg: #ffffff;
   --biba-dim: #c3cfe4;
   background:
-    radial-gradient(140% 90% at 50% -10%, #16233c 0%, rgba(22, 35, 60, 0) 60%),
-    linear-gradient(180deg, #070b16 0%, #04060d 60%, #060a12 100%);
+    radial-gradient(130% 78% at 50% -12%, #0b1830 0%, rgba(11, 24, 48, 0) 56%),
+    linear-gradient(180deg, #04080f 0%, #02060d 58%, #030711 100%);
   color: var(--biba-fg);
 }
 
@@ -35,70 +39,54 @@
   pointer-events: none;
 }
 
-/* 左右两侧的能量光晕:主队偏蓝、客队偏金 */
+/* 左右两侧的能量光晕:主队洋红、客队青蓝 */
 .biba-glow {
   position: absolute;
-  width: 1100px;
-  height: 1100px;
+  width: 1150px;
+  height: 1150px;
   border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.55;
+  filter: blur(95px);
 }
 
-.biba-glow--blue {
-  left: -360px;
-  top: -220px;
-  background: radial-gradient(circle, rgba(20, 110, 220, 0.75) 0%, rgba(20, 110, 220, 0) 68%);
+.biba-glow--home {
+  left: -340px;
+  top: -280px;
+  background: radial-gradient(circle, rgba(255, 45, 150, 0.4) 0%, rgba(255, 45, 150, 0) 68%);
 }
 
-.biba-glow--gold {
-  right: -360px;
-  top: -220px;
-  background: radial-gradient(circle, rgba(220, 140, 10, 0.7) 0%, rgba(220, 140, 10, 0) 68%);
+.biba-glow--away {
+  right: -340px;
+  top: -280px;
+  background: radial-gradient(circle, rgba(34, 217, 240, 0.38) 0%, rgba(34, 217, 240, 0) 68%);
 }
 
-/* 顶部打下来的光柱 */
+/* 顶部中央打下来的那道蓝光 */
 .biba-shaft {
   position: absolute;
   left: 50%;
-  top: -320px;
-  width: 1000px;
-  height: 820px;
+  top: -180px;
+  width: 460px;
+  height: 600px;
   transform: translateX(-50%);
-  background: conic-gradient(
-    from 172deg at 50% 0%,
-    rgba(120, 190, 255, 0) 0deg,
-    rgba(120, 190, 255, 0.16) 7deg,
-    rgba(120, 190, 255, 0) 15deg,
-    rgba(120, 190, 255, 0) 24deg,
-    rgba(120, 190, 255, 0.12) 31deg,
-    rgba(120, 190, 255, 0) 41deg
-  );
-  filter: blur(26px);
+  background: linear-gradient(180deg, rgba(96, 168, 255, 0.3) 0%, rgba(96, 168, 255, 0.07) 45%, rgba(96, 168, 255, 0) 100%);
+  filter: blur(30px);
 }
 
 /* 底部那层细网格 */
 .biba-grid {
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(rgba(120, 165, 225, 0.16) 1px, rgba(0, 0, 0, 0) 1px);
+  background-image: radial-gradient(rgba(120, 165, 225, 0.13) 1px, rgba(0, 0, 0, 0) 1px);
   background-size: 26px 26px;
-  opacity: 0.55;
-  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, #000 100%);
-  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 45%, #000 100%);
+  opacity: 0.5;
+  -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, #000 100%);
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0) 55%, #000 100%);
 }
 
-/*
- * 插画的渐隐是**烤进图片里**的(边缘像素乘暗),不是 CSS 遮罩。
- *
- * 为什么不用 mask-image:渐隐要同时处理【上/下】和【靠中心那侧】两个方向,
- * 单层遮罩做不到两层,两层遮罩又要 mask-composite(老版本 Chrome 不认);
- * 而大屏上是 screen 混合 —— 像素越黑越透明,把边缘乘暗等于淡出,
- * 效果一样,还不挑浏览器。
- */
+/* 两侧插画(渐隐烤在图片里) */
 .biba-art {
   position: absolute;
-  top: 110px;
+  top: 35px;
   background-repeat: no-repeat;
   background-size: 100% 100%;
   mix-blend-mode: screen;
@@ -106,66 +94,16 @@
 
 .biba-art--home {
   left: 0;
-  width: 745px;
-  height: 420px;
+  width: 700px;
+  height: 517px;
   background-image: url('/biba-art-left.jpg');
 }
 
 .biba-art--away {
   right: 0;
-  width: 740px;
-  height: 420px;
+  width: 690px;
+  height: 518px;
   background-image: url('/biba-art-right.jpg');
-}
-
-/* ---------------- 顶栏 ---------------- */
-
-.biba-header {
-  position: relative;
-  z-index: 2;
-  height: 120px;
-  flex: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 56px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.biba-head-title {
-  font-size: 46px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #fff;
-  text-shadow: 0 3px 16px rgba(0, 0, 0, 0.75);
-}
-
-/* 标题底下那截蓝色短横线(参考图里有) */
-.biba-head-underline {
-  margin-top: 10px;
-  width: 120px;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, var(--biba-blue) 0%, rgba(46, 163, 255, 0) 100%);
-}
-
-.biba-head-right {
-  text-align: right;
-}
-
-.biba-brand {
-  font-size: 40px;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  color: #fff;
-  text-shadow: 0 3px 16px rgba(0, 0, 0, 0.7);
-}
-
-.biba-brand-sub {
-  margin-top: 4px;
-  font-size: 20px;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.55);
 }
 
 /* ---------------- 中央竖排主视觉 ---------------- */
@@ -177,13 +115,16 @@
   min-height: 0;
   display: grid;
   grid-template-columns: 1fr 700px 1fr;
-  grid-template-rows: 300px 160px 1fr;
+  grid-template-rows: 240px 130px 200px 1fr;
   grid-template-areas:
-    'logo  logo   logo'
-    'clock clock  clock'
-    'home  scores away';
+    'logo   logo   logo'
+    'versus versus versus'
+    'clock  clock  clock'
+    'home   scores away';
   padding: 0 56px;
 }
+
+/* ---- 赛事标识:皇冠 + 场馆名 + 赛事名 ---- */
 
 .biba-logo {
   grid-area: logo;
@@ -191,41 +132,92 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 6px;
 }
 
 .biba-crown {
-  width: 66px;
-  height: 54px;
+  width: 100px;
+  height: 78px;
   object-fit: contain;
-  filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.65));
+  filter: drop-shadow(0 4px 20px rgba(110, 175, 255, 0.5));
 }
 
-.biba-wordmark {
-  width: 300px;
-  height: auto;
-  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.6));
-}
-
-/* 赛事名剩下的那段(SEMIFINALS / FINALS / 2026 …) */
-.biba-logo-sub {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
+/* 场馆/品牌名(赞助商名) */
+.biba-brand {
   font-size: 46px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-indent: 0.22em;
+  color: #fff;
+  text-shadow: 0 3px 18px rgba(0, 0, 0, 0.8);
+}
+
+/* 赛事名(金黄),两侧各一段横线 */
+.biba-event {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+
+.biba-event-line {
+  display: block;
+  width: 150px;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(252, 232, 122, 0) 0%, rgba(252, 232, 122, 0.9) 100%);
+}
+
+.biba-event-line:last-child {
+  background: linear-gradient(90deg, rgba(252, 232, 122, 0.9) 0%, rgba(252, 232, 122, 0) 100%);
+}
+
+.biba-event-text {
+  font-size: 58px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  color: var(--biba-gold);
+  text-shadow: 0 0 34px rgba(252, 232, 122, 0.35);
+}
+
+/* ---- 对阵行 ---- */
+
+.biba-versus {
+  grid-area: versus;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 34px;
+}
+
+.biba-versus-side {
+  font-size: 92px;
   font-weight: 900;
   font-style: italic;
-  letter-spacing: 0.02em;
-  text-shadow: 0 4px 18px rgba(0, 0, 0, 0.7);
+  line-height: 1;
+  letter-spacing: 0.01em;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
 }
 
-.biba-sub-lead {
-  color: #3ea9ff;
+.biba-versus-side--home {
+  background-image: linear-gradient(168deg, #ffe3f3 0%, #ff6fbe 38%, #ff2e9b 74%, #ff9ad0 100%);
+  filter: drop-shadow(0 6px 22px rgba(255, 46, 155, 0.45));
 }
 
-.biba-sub-tail {
-  color: #fff;
+.biba-versus-side--away {
+  background-image: linear-gradient(168deg, #ffffff 0%, #e8faff 30%, #63d3f0 70%, #22d9f0 100%);
+  filter: drop-shadow(0 6px 22px rgba(34, 217, 240, 0.4));
 }
+
+.biba-versus-vs {
+  font-size: 52px;
+  font-weight: 800;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.85);
+  text-shadow: 0 3px 14px rgba(0, 0, 0, 0.7);
+}
+
+/* ---- 比赛钟 ---- */
 
 .biba-clock-row {
   grid-area: clock;
@@ -237,7 +229,7 @@
 /* 主钟框:固定尺寸,不能跟着内容缩 —— 框歪一点整块屏就散了 */
 .biba-clock-row .biba-frame {
   width: 520px;
-  height: 150px;
+  height: 136px;
 }
 
 .biba-clock-content {
@@ -245,7 +237,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 24px;
 }
 
 .biba-period {
@@ -256,7 +248,7 @@
   text-shadow: 0 4px 16px rgba(0, 0, 0, 0.65);
 }
 
-/* ---------------- 斜切金属框 ---------------- */
+/* ---- 斜切金属框 ---- */
 
 /*
  * 框是八角斜切的(参考图那种"切角"造型):
@@ -291,25 +283,41 @@
   filter: drop-shadow(0 0 22px rgba(255, 196, 0, 0.45));
 }
 
-.biba-frame--blue {
+/* 主队框:洋红 */
+.biba-frame--home {
   background: linear-gradient(
     150deg,
-    #d8f2ff 0%,
-    #1e8fe0 16%,
-    #a8e2ff 30%,
-    #0a5fa8 48%,
-    #5fd0ff 66%,
-    #07507f 84%,
-    #2ea3ff 100%
+    #ffd9f0 0%,
+    #ff45a8 16%,
+    #ffe0f4 30%,
+    #b31c6c 48%,
+    #ff7ec6 66%,
+    #7c0d3e 84%,
+    #ff45a8 100%
   );
-  filter: drop-shadow(0 0 22px rgba(46, 163, 255, 0.45));
+  filter: drop-shadow(0 0 22px rgba(255, 69, 168, 0.5));
+}
+
+/* 客队框:青蓝 */
+.biba-frame--away {
+  background: linear-gradient(
+    150deg,
+    #d6faff 0%,
+    #22d9f0 16%,
+    #eafdff 30%,
+    #0a6f7e 48%,
+    #7ceaff 66%,
+    #05525e 84%,
+    #22d9f0 100%
+  );
+  filter: drop-shadow(0 0 22px rgba(34, 217, 240, 0.5));
 }
 
 /* 框里的深色面板 */
 .biba-frame-face {
   position: absolute;
   inset: 9px;
-  background: radial-gradient(130% 150% at 50% 0%, #17253c 0%, #0a1220 58%, #05090f 100%);
+  background: radial-gradient(130% 150% at 50% 0%, #14203a 0%, #080e1c 58%, #04070e 100%);
   clip-path: polygon(
     18px 0,
     calc(100% - 18px) 0,
@@ -322,7 +330,7 @@
   );
 }
 
-/* ---------------- 比分 ---------------- */
+/* ---- 比分 ---- */
 
 .biba-scores {
   grid-area: scores;
@@ -331,12 +339,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 26px;
+  gap: 0;
 }
 
 .biba-score-frame {
   width: 310px;
-  height: 250px;
+  height: 260px;
 }
 
 .biba-score-num {
@@ -354,30 +362,33 @@
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.65));
 }
 
-/* 两个比分框中间那一列圆点 */
-.biba-dots {
+/* 两个比分框中间那个冒号 */
+.biba-colon {
+  width: 70px;
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  align-items: center;
+  gap: 18px;
 }
 
-.biba-dots i {
-  width: 12px;
-  height: 12px;
+.biba-colon i {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: #cfe2ff;
-  box-shadow: 0 0 16px rgba(150, 200, 255, 0.9);
+  background: #dfe9f5;
+  box-shadow: 0 0 14px rgba(200, 220, 255, 0.8);
 }
 
-/* ---------------- 两侧队名 ---------------- */
+/* ---- 两侧队名 ---- */
 
 .biba-team {
   align-self: start;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  align-items: center;
+  gap: 0;
   min-width: 0;
-  padding: 0 10px;
 }
 
 .biba-team--home {
@@ -386,48 +397,75 @@
 
 .biba-team--away {
   grid-area: away;
-  align-items: flex-end;
-  text-align: right;
 }
 
-/* 队色横条 */
+/* 插画下面那道队色横条(参考图里就有,贴着插画底边) */
 .biba-team-bar {
   width: 100%;
+  max-width: 430px;
   height: 15px;
   border-radius: 8px;
-  background: linear-gradient(90deg, var(--team-color) 0%, var(--team-color) 58%, rgba(0, 0, 0, 0) 100%);
+  margin-bottom: 24px;
+  background: linear-gradient(90deg, var(--team-color) 0%, var(--team-color) 55%, rgba(0, 0, 0, 0) 100%);
   filter: drop-shadow(0 0 12px var(--team-color));
 }
 
 .biba-team--away .biba-team-bar {
-  background: linear-gradient(270deg, var(--team-color) 0%, var(--team-color) 58%, rgba(0, 0, 0, 0) 100%);
+  background: linear-gradient(270deg, var(--team-color) 0%, var(--team-color) 55%, rgba(0, 0, 0, 0) 100%);
 }
 
-.biba-team-name {
+.biba-team-name-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 6px;
   max-width: 100%;
-  font-size: 62px;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  color: #fff;
-  text-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
 }
 
-.biba-team--away .biba-team-name {
-  flex-direction: row-reverse;
-}
-
-.biba-team-name-text {
-  min-width: 0;
+/* 全名:小号、字距很宽 */
+.biba-team-full {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: rgba(255, 255, 255, 0.78);
+  text-shadow: 0 2px 14px rgba(0, 0, 0, 0.85);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* 简称:大号斜体,金属渐变 */
+.biba-team-short {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 96px;
+  font-weight: 900;
+  font-style: italic;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  color: #fff;
+  text-shadow: 0 6px 24px rgba(0, 0, 0, 0.85);
+}
+
+.biba-team--home .biba-team-short {
+  background-image: linear-gradient(168deg, #ffffff 0%, #ffc8e8 24%, #ff45a8 64%, #ff8fc9 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.biba-team--away .biba-team-short {
+  background-image: linear-gradient(168deg, #ffffff 0%, #e8faff 24%, #5fd6f0 64%, #22d9f0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .biba-team-logo {
-  height: 58px;
+  height: 56px;
   width: auto;
   max-width: 130px;
   object-fit: contain;
@@ -439,23 +477,47 @@
   opacity: 0.9;
 }
 
+/* 队名底下那道弧形色带 */
+.biba-swoosh {
+  width: 100%;
+  max-width: 430px;
+  height: 46px;
+  margin-top: -4px;
+  filter: drop-shadow(0 0 14px var(--team-color));
+}
+
 /* ---------------- 底栏:犯规 / 暂停 ---------------- */
 
 .biba-bottom {
   position: relative;
   z-index: 2;
-  height: 130px;
+  height: 155px;
   flex: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 底栏顶上那条分隔线 */
+.biba-bottom-rule {
+  position: absolute;
+  left: 56px;
+  right: 56px;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.16) 10%,
+    rgba(255, 255, 255, 0.16) 90%,
+    rgba(255, 255, 255, 0) 100%
+  );
 }
 
 .biba-bottom-row {
   display: flex;
   align-items: center;
-  gap: 54px;
+  gap: 56px;
 }
 
 .biba-bottom-divider {
@@ -471,7 +533,7 @@
 }
 
 .biba-stat-name {
-  font-size: 30px;
+  font-size: 32px;
   font-weight: 900;
   letter-spacing: 0.04em;
   color: var(--team-color);
@@ -485,7 +547,7 @@
 }
 
 .biba-stat b {
-  font-size: 32px;
+  font-size: 34px;
   font-weight: 900;
   color: #fff;
 }
@@ -517,7 +579,7 @@
   align-items: center;
   justify-content: center;
   gap: 18px;
-  background: radial-gradient(120% 100% at 50% 32%, rgba(12, 20, 36, 0.94) 0%, rgba(4, 7, 14, 0.98) 70%);
+  background: radial-gradient(120% 100% at 50% 32%, rgba(8, 14, 28, 0.94) 0%, rgba(3, 6, 13, 0.98) 70%);
 }
 
 .biba-overlay--timeout {
@@ -545,8 +607,8 @@
 }
 
 .biba-crown--overlay {
-  width: 82px;
-  height: 68px;
+  width: 120px;
+  height: 94px;
 }
 
 /* 终场标记 */
@@ -560,7 +622,7 @@
   font-weight: 900;
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 0 60px rgba(255, 196, 0, 0.8);
+  text-shadow: 0 0 60px rgba(252, 232, 122, 0.8);
 }
 
 /*

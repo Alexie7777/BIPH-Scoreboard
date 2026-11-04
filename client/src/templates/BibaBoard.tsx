@@ -1,17 +1,21 @@
 /**
- * 「总决赛」大屏模板 —— 电竞转播风。
+ * 「总决赛(电竞风)」大屏模板 —— 电竞转播风。
  *
- * 版式照着 BIBA SEMIFINALS 的转播画面做的,和前三套模板最大的不同是
- * **信息是竖着堆在中间的**:
+ * 版式(1920×1080 设计画布):
  *
- *        赛事 logo(皇冠 + 笔刷字)
- *              ↓
- *        金色斜切框:比赛钟 + 节次
- *              ↓
- *        两个斜切比分框(主队蓝 / 客队金)+ 中间一列圆点
+ *        [皇冠]
+ *          BIBA                    ← 场馆/品牌(赞助商名)
+ *     ─── BIBA FINALS ───         ← 赛事名(顶栏标题),金黄
+ *      MEGS   vs   ORCAS          ← 对阵行,两队各用队色
+ *        ╔══════════╗             ← 金色斜切框:比赛钟 + 节次
+ *        ║ 10:00 Q1 ║
+ *        ╚══════════╝
+ *  MEGALODONS  ╔════╗   ╔════╗   ORCAS
+ *  MEGS        ║ 0  ║ : ║ 0  ║   ORCAS
+ *  ~~~~~~~     ╚════╝   ╚════╝   ~~~~~~~
  *
- * 队名退到两侧中线位置,两侧各有一队主视觉插画(鲨鱼 / 虎鲸),
- * 犯规与暂停收到最底下一条横栏里。
+ *  ────────────────────────────────────────────
+ *   MEGS FOULS 0 TIMEOUTS 4/4 │ ORCAS FOULS 0 TIMEOUTS 4/4
  *
  * 三件事说明一下:
  *
@@ -19,8 +23,9 @@
  *    (和简洁 / LED / 现代转播同一份纯函数),这块只管长什么样。
  *
  * 2. **插画是本地素材**,不联网也不依赖外链:
- *    public/biba-art-left.jpg、biba-art-right.jpg、biba-crown.png、biba-wordmark.png。
- *    前两张用 screen 混合模式叠在深底上,黑的地方自然透掉,边缘用遮罩淡出。
+ *    public/biba-art-left.jpg、biba-art-right.jpg、biba-crown.png。
+ *    前两张用 screen 混合模式叠在深底上,黑的地方自然透掉,边缘的渐隐
+ *    是**烤进图片**的(像素乘暗 = 淡出),不挑浏览器版本。
  *
  * 3. **进攻钟默认不显示**。本场勾掉「使用进攻钟」时这块完全不出现;
  *    万一哪场要用,它会缩在主钟框左侧的小窗里(和真转播一样)。
@@ -32,26 +37,29 @@ import { IconChevron } from '../components/icons';
 import { cssVars } from '../lib/cssVars';
 import { computeBoardData, type BoardProps } from './boardData';
 
-/** 主队侧:蓝 */
-const HOME_COLOR = '#2ea3ff';
-/** 客队侧:金 */
-const AWAY_COLOR = '#ffc400';
+/** 主队侧:洋红 */
+const HOME_COLOR = '#ff45a8';
+/** 客队侧:青蓝 */
+const AWAY_COLOR = '#22d9f0';
+/** 中央标题:金黄 */
+const GOLD_COLOR = '#fce87a';
 
-/**
- * 把赛事名拆成"笔刷字素材 + 实时文字"两半。
- *
- * 中央那块 "BIBA" 是固定素材(参考图里的笔刷字),赛事名里开头的那段
- * 由素材承担,剩下的(SEMIFINALS / FINALS / 2026 …)实时显示 ——
- * 这样同一块屏既能打半决赛也能打总决赛,不用换图。
- *
- * 赛事名里没有 "BIBA" 开头时(比如"校内联赛")就不出笔刷字,
- * 整串都实时显示 —— 免得顶着别家联赛的 logo。
- */
-function splitLogoText(title: string): { wordmark: boolean; rest: string } {
-  const trimmed = title.trim();
-  const m = /^BIBA\b/i.exec(trimmed);
-  if (!m) return { wordmark: false, rest: trimmed };
-  return { wordmark: true, rest: trimmed.slice(m[0].length).trim() };
+/** 队名底下那道弧形色带 */
+function Swoosh({ id, color }: { id: string; color: string }) {
+  return (
+    <svg className="biba-swoosh" viewBox="0 0 420 52" preserveAspectRatio="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={color} stopOpacity="0.05" />
+          <stop offset="26%" stopColor={color} stopOpacity="0.9" />
+          <stop offset="62%" stopColor={color} stopOpacity="1" />
+          <stop offset="88%" stopColor="#ffffff" stopOpacity="0.85" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0.15" />
+        </linearGradient>
+      </defs>
+      <path d="M0 38 C 110 46 250 22 420 4 L 420 20 C 270 32 130 52 0 50 Z" fill={`url(#${id})`} />
+    </svg>
+  );
 }
 
 export function BibaBoard({ stretch, ...rest }: BoardProps) {
@@ -60,10 +68,14 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
   const { match } = rest;
   const { home, away, rules, presentation } = match;
 
-  const { wordmark, rest: logoText } = splitLogoText(d.title);
-  // 赛事名里第一段用蓝、第二段用白(参考图就是这个配色:SEMIFINALS 蓝、2026 白)
-  const [logoLead, ...logoTail] = logoText ? logoText.split(/\s+/) : [];
-  const logoTailText = logoTail.join(' ');
+  /*
+   * 队名有两个层次:
+   *   - 大字 = 简称(`shortName`),比分框旁边那个大字就是它;
+   *   - 小字 = 全名(`name`),大字上面那一行字母间距很宽的小字。
+   * 简称没配时退回全名(不能空着)。
+   */
+  const homeShort = home.shortName || home.name;
+  const awayShort = away.shortName || away.name;
 
   const startLabel = rest.startRemainingMs > 0 ? t('board.startup.label') : t('board.startup.tipoff');
   // 中场倒计时是可选字段,老库里没有 —— 缺了就当 0
@@ -71,43 +83,37 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
 
   return (
     <div className={`board-canvas tpl-biba${stretch ? ' stretch' : ''}`}>
-      {/* ---------------- 背景层:光晕 + 网格 + 两侧插画 ---------------- */}
+      {/* ---------------- 背景层:能量光晕 + 两侧插画 ---------------- */}
       <div className="biba-bg" aria-hidden="true">
-        <div className="biba-glow biba-glow--blue" />
-        <div className="biba-glow biba-glow--gold" />
+        <div className="biba-glow biba-glow--home" />
+        <div className="biba-glow biba-glow--away" />
         <div className="biba-shaft" />
         <div className="biba-grid" />
         <div className="biba-art biba-art--home" />
         <div className="biba-art biba-art--away" />
       </div>
 
-      {/* ---------------- 顶栏 ---------------- */}
-      <div className="biba-header">
-        <div className="biba-head-left">
-          <div className="biba-head-title">{d.title}</div>
-          <div className="biba-head-underline" />
-        </div>
-        {d.showSponsor ? (
-          <div className="biba-head-right">
-            {presentation.sponsorName ? <div className="biba-brand">{presentation.sponsorName}</div> : null}
-            {presentation.sponsorText ? <div className="biba-brand-sub">{presentation.sponsorText}</div> : null}
-          </div>
-        ) : null}
-      </div>
-
       {/* ---------------- 中央竖排主视觉 ---------------- */}
       <div className="biba-stage">
+        {/* 赛事标识:皇冠 + 场馆名 + 赛事名 */}
         <div className="biba-logo">
           <img className="biba-crown" src="/biba-crown.png" alt="" />
-          {wordmark ? <img className="biba-wordmark" src="/biba-wordmark.png" alt="" /> : null}
-          {logoText ? (
-            <div className="biba-logo-sub">
-              <span className="biba-sub-lead">{logoLead}</span>
-              {logoTailText ? <span className="biba-sub-tail">{logoTailText}</span> : null}
-            </div>
-          ) : null}
+          {presentation.sponsorName ? <div className="biba-brand">{presentation.sponsorName}</div> : null}
+          <div className="biba-event">
+            <i className="biba-event-line" />
+            <span className="biba-event-text">{d.title}</span>
+            <i className="biba-event-line" />
+          </div>
         </div>
 
+        {/* 对阵行 */}
+        <div className="biba-versus">
+          <span className="biba-versus-side biba-versus-side--home">{homeShort}</span>
+          <span className="biba-versus-vs">vs</span>
+          <span className="biba-versus-side biba-versus-side--away">{awayShort}</span>
+        </div>
+
+        {/* 比赛钟 */}
         <div className="biba-clock-row">
           <div className="biba-frame biba-frame--gold">
             <div className="biba-frame-face" />
@@ -136,57 +142,65 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
           </div>
         </div>
 
-        {/* 两侧队名 + 中间两个比分框,分属网格的三列 */}
-        {/* 主队:左侧 */}
-        <div className="biba-team biba-team--home">
-            <div className="biba-team-bar" style={cssVars({ '--team-color': HOME_COLOR })} />
-            <div className="biba-team-name">
+        {/* 两个比分框 + 中间的冒号 */}
+        <div className="biba-scores">
+          <div className="biba-frame biba-frame--home biba-score-frame">
+            <div className="biba-frame-face" />
+            <div className="biba-score-num">{home.score}</div>
+          </div>
+          <div className="biba-colon">
+            <i />
+            <i />
+          </div>
+          <div className="biba-frame biba-frame--away biba-score-frame">
+            <div className="biba-frame-face" />
+            <div className="biba-score-num">{away.score}</div>
+          </div>
+        </div>
+
+        {/* 左侧队名 */}
+        <div className="biba-team biba-team--home" style={cssVars({ '--team-color': HOME_COLOR })}>
+          <div className="biba-team-bar" />
+          <div className="biba-team-name-row">
+            <div className="biba-team-full">{home.name}</div>
+            <div className="biba-team-short">
               {home.logoUrl ? <img className="biba-team-logo" src={home.logoUrl} alt="" /> : null}
-              <span className="biba-team-name-text">{home.name}</span>
+              <span>{homeShort}</span>
               {match.possession === 'home' && rules.showPossession !== false ? (
                 <span className="biba-poss">
-                  <IconChevron size={26} />
+                  <IconChevron size={28} />
                 </span>
               ) : null}
             </div>
           </div>
+          <Swoosh id="biba-swoosh-home" color={HOME_COLOR} />
+        </div>
 
-          {/* 两个比分框 + 中间一列圆点 */}
-          <div className="biba-scores">
-            <div className="biba-frame biba-frame--blue biba-score-frame">
-              <div className="biba-frame-face" />
-              <div className="biba-score-num">{home.score}</div>
-            </div>
-            <div className="biba-dots">
-              <i />
-              <i />
-            </div>
-            <div className="biba-frame biba-frame--gold biba-score-frame">
-              <div className="biba-frame-face" />
-              <div className="biba-score-num">{away.score}</div>
-            </div>
-          </div>
-
-          {/* 客队:右侧 */}
-          <div className="biba-team biba-team--away">
-            <div className="biba-team-bar" style={cssVars({ '--team-color': AWAY_COLOR })} />
-            <div className="biba-team-name">
+        {/* 右侧队名 */}
+        <div className="biba-team biba-team--away" style={cssVars({ '--team-color': AWAY_COLOR })}>
+          <div className="biba-team-bar" />
+          <div className="biba-team-name-row">
+            <div className="biba-team-full">{away.name}</div>
+            <div className="biba-team-short">
               {away.logoUrl ? <img className="biba-team-logo" src={away.logoUrl} alt="" /> : null}
-              <span className="biba-team-name-text">{away.name}</span>
+              <span>{awayShort}</span>
               {match.possession === 'away' && rules.showPossession !== false ? (
                 <span className="biba-poss">
-                  <IconChevron size={26} />
+                  <IconChevron size={28} />
                 </span>
               ) : null}
             </div>
           </div>
+          <Swoosh id="biba-swoosh-away" color={AWAY_COLOR} />
+        </div>
       </div>
 
       {/* ---------------- 底部横栏:犯规 / 暂停 ---------------- */}
       <div className="biba-bottom">
+        <div className="biba-bottom-rule" />
         <div className="biba-bottom-row">
           <div className="biba-stat-group" style={cssVars({ '--team-color': HOME_COLOR })}>
-            <span className="biba-stat-name">{home.name}</span>
+            <span className="biba-stat-name">{homeShort}</span>
             {rules.showTeamFouls ? (
               <span className="biba-stat">
                 {t('board.fouls')} <b>{home.fouls}</b>
@@ -195,7 +209,9 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
             {rules.showTimeouts ? (
               <span className="biba-stat">
                 {t('board.timeouts')} <b>{home.timeouts}</b>
-                {rules.timeoutsPerTeam > 0 ? <span className="biba-stat-dim">/{rules.timeoutsPerTeam}</span> : null}
+                {rules.timeoutsPerTeam > 0 ? (
+                  <span className="biba-stat-dim">/{rules.timeoutsPerTeam}</span>
+                ) : null}
               </span>
             ) : null}
             {d.homeBonus ? <span className="biba-bonus">BONUS</span> : null}
@@ -204,7 +220,7 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
           <div className="biba-bottom-divider" />
 
           <div className="biba-stat-group" style={cssVars({ '--team-color': AWAY_COLOR })}>
-            <span className="biba-stat-name">{away.name}</span>
+            <span className="biba-stat-name">{awayShort}</span>
             {rules.showTeamFouls ? (
               <span className="biba-stat">
                 {t('board.fouls')} <b>{away.fouls}</b>
@@ -213,7 +229,9 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
             {rules.showTimeouts ? (
               <span className="biba-stat">
                 {t('board.timeouts')} <b>{away.timeouts}</b>
-                {rules.timeoutsPerTeam > 0 ? <span className="biba-stat-dim">/{rules.timeoutsPerTeam}</span> : null}
+                {rules.timeoutsPerTeam > 0 ? (
+                  <span className="biba-stat-dim">/{rules.timeoutsPerTeam}</span>
+                ) : null}
               </span>
             ) : null}
             {d.awayBonus ? <span className="biba-bonus">BONUS</span> : null}
@@ -233,7 +251,7 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
             value={formatClock(rest.startRemainingMs)}
             height={170}
             color={d.startUrgent ? '#ff4d5e' : '#ffffff'}
-            dimColor="rgba(255,255,255,0.10)"
+            dimColor="rgba(255,255,255,0.02)"
             title={t('board.startup.title', { time: formatClock(rest.startRemainingMs) })}
           />
           {rest.startMode === 'scheduled' && match.startTime ? (
@@ -251,7 +269,7 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
             value={formatClock(halftimeRemainingMs)}
             height={170}
             color="#ffffff"
-            dimColor="rgba(255,255,255,0.10)"
+            dimColor="rgba(255,255,255,0.02)"
             title={t('board.halftime.title', { time: formatClock(halftimeRemainingMs) })}
           />
           <div className="biba-overlay-sub">
@@ -261,13 +279,16 @@ export function BibaBoard({ stretch, ...rest }: BoardProps) {
       ) : null}
 
       {d.timeoutActive ? (
-        <div className="biba-overlay biba-overlay--timeout" style={cssVars({ '--team-color': d.timeoutTeam?.color ?? HOME_COLOR })}>
+        <div
+          className="biba-overlay biba-overlay--timeout"
+          style={cssVars({ '--team-color': d.timeoutTeam?.color ?? HOME_COLOR })}
+        >
           <div className="biba-overlay-label">{t('board.timeout.request', { team: d.timeoutTeam?.name ?? '' })}</div>
           <SevenSegment
             value={formatSeconds(rest.timeoutRemainingMs)}
             height={150}
             color="#ffffff"
-            dimColor="rgba(255,255,255,0.10)"
+            dimColor="rgba(255,255,255,0.02)"
             title={t('board.timeout.title', { time: formatSeconds(rest.timeoutRemainingMs) })}
           />
         </div>
