@@ -1279,3 +1279,76 @@ describe('端到端:取消勾选「使用进攻钟」', () => {
     control.close();
   });
 });
+
+/* ============================================================================
+ * 端到端:比赛钟在跑的时候不许开启进攻钟
+ *
+ * 2026-11-04 加的功能:配置页的「使用进攻钟」开关,在比赛钟运行时必须点不动,
+ * 服务端也要拒(命令通道是公开的,不能只靠界面拦)。
+ *
+ * 走的仍然是 REST PATCH —— 和配置页同一个接口。
+ * ========================================================================== */
+describe('端到端:比赛钟在跑时不许开启进攻钟', () => {
+  let matchId: string;
+  let controlToken: string;
+
+  beforeAll(async () => {
+    const res = await fetch(`${BASE}/api/matches`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        name: '开赛前配置',
+        homeName: '甲队',
+        awayName: '乙队',
+        court: '3',
+        rules: { periods: 4, periodMinutes: 8, shotClockSeconds: 24, useShotClock: false },
+      }),
+    });
+    const created = (await res.json()) as { match: Match; operatorToken: string };
+    matchId = created.match.id;
+    controlToken = created.operatorToken;
+  }, 60_000);
+
+  it('比赛钟在跑时开启进攻钟 → 400,规则没变', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    // 开球
+    control.send({ t: 'cmd', cmdId: 'k1', type: 'clock.start', payload: {} });
+    await until(() => control.match?.clock.running === true);
+
+    const res = await fetch(`${BASE}/api/matches/${matchId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-control-token': controlToken },
+      body: JSON.stringify({ rules: { useShotClock: true } }),
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toContain('比赛钟');
+
+    // 规则没被改掉
+    const after = (await (await fetch(`${BASE}/api/matches/${matchId}`)).json()) as { match: Match };
+    expect(after.match.rules.useShotClock).toBe(false);
+
+    control.close();
+  });
+
+  it('暂停比赛钟之后就可以开启', async () => {
+    const control = await connect(matchId, 'control', controlToken);
+    await until(() => control.match !== null);
+
+    control.send({ t: 'cmd', cmdId: 'k2', type: 'clock.pause', payload: {} });
+    await until(() => control.match?.clock.running === false);
+
+    const res = await fetch(`${BASE}/api/matches/${matchId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', 'x-control-token': controlToken },
+      body: JSON.stringify({ rules: { useShotClock: true } }),
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { match: Match };
+    expect(body.match.rules.useShotClock).toBe(true);
+
+    control.close();
+  });
+});

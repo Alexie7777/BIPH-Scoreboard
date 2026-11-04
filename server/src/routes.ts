@@ -5,6 +5,7 @@ import QRCode from 'qrcode';
 import {
   MAX_START_COUNTDOWN_MS,
   buildPeriodLabel,
+  canTurnOnShotClock,
   defaultRulesFor,
   isLocale,
   isSportId,
@@ -216,6 +217,21 @@ export function registerRoutes(app: FastifyInstance, deps: RouteDeps): void {
         }
       }
       const now = serverNow();
+      /*
+       * 比赛钟在跑的时候**不许开启**进攻钟(与 WS 的 match.update 同一个规矩)。
+       *
+       * 配置页走的正是这个 REST 接口 —— 界面上会把它灰掉,但服务端也得自己挡一道:
+       * 命令通道是公开的,不能只靠界面拦。
+       */
+      if (
+        patch.rules?.useShotClock === true &&
+        !canTurnOnShotClock({
+          clockRunning: current.clock.running,
+          useShotClock: current.rules.useShotClock,
+        })
+      ) {
+        return reply.code(400).send({ error: '比赛钟在跑,先暂停比赛钟再开启进攻钟' });
+      }
       /*
        * `startCountdownMs` 只是"还剩多久"这句话,不是 Match 的字段
        * (真正存进比赛的是锚点)—— 补丁里的摘掉,老库里已经混进去的野字段也顺手清掉,

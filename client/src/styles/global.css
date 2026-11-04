@@ -701,6 +701,40 @@ h4 {
   accent-color: var(--accent);
 }
 
+/*
+ * 灰掉的开关(条件不满足时)。
+ *
+ * 不能只是"点不动" —— 那样用户只看到点不动,不知道为什么。
+ * 整条变淡 + 禁止光标,旁边再给一句话说明原因(见 setup.switch.shot.locked)。
+ */
+.switch:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.switch input:disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * 开关 + 它自己的说明文字,竖着摞。
+ *
+ * 说明文字放在开关正下方,而不是塞在同一行里 ——
+ * 塞进去会把旁边那个开关挤歪(一行里有好几个开关)。
+ */
+.switch-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* 说明文字:条件不满足时为什么不能动 */
+.field-hint.blocked {
+  color: var(--warn);
+}
+
 /* ---------------- 徽标 ---------------- */
 
 .badge {

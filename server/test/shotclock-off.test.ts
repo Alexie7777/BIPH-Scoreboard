@@ -16,7 +16,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyCommand, createMatch, rejectReason } from '../src/match.js';
-import { shotClockEnabled } from '@biph/shared';
+import { canTurnOnShotClock, shotClockEnabled } from '@biph/shared';
 
 const T0 = 1_700_000_000_000;
 
@@ -138,5 +138,66 @@ describe('重新勾选「使用进攻钟」', () => {
     m = applyCommand(m, 'clock.toggle', {}, T0 + 3000).match;
     expect(m.shotClock.running).toBe(true);
     expect(m.shotClock.remainingMs).toBe(24_000);
+  });
+});
+
+describe('比赛钟在跑的时候不许开启进攻钟', () => {
+  it('判定口径:只有"跑着 + 还没开"才不许开', () => {
+    // 跑着且没开 → 不许开
+    expect(canTurnOnShotClock({ clockRunning: true, useShotClock: false })).toBe(false);
+    // 跑着但已经开着 → 不受影响(关掉是允许的)
+    expect(canTurnOnShotClock({ clockRunning: true, useShotClock: true })).toBe(true);
+    // 停着 → 可以开
+    expect(canTurnOnShotClock({ clockRunning: false, useShotClock: false })).toBe(true);
+    expect(canTurnOnShotClock({ clockRunning: false, useShotClock: true })).toBe(true);
+  });
+
+  it('比赛钟在跑时,开启进攻钟的命令被拒绝', () => {
+    // 本场一开始就没开进攻钟(校赛不打 24 秒),现在想开
+    let m = freshMatch({ useShotClock: false });
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    expect(m.clock.running).toBe(true);
+
+    const reason = rejectReason(
+      m,
+      'match.update',
+      { patch: { rules: { useShotClock: true } } },
+      T0 + 1000,
+    );
+    expect(reason).toBe('比赛钟在跑,先暂停比赛钟再开启进攻钟');
+  });
+
+  it('暂停比赛钟之后,就可以开启进攻钟了', () => {
+    let m = freshMatch({ useShotClock: false });
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    m = applyCommand(m, 'clock.pause', {}, T0 + 1000).match;
+    expect(m.clock.running).toBe(false);
+
+    expect(
+      rejectReason(m, 'match.update', { patch: { rules: { useShotClock: true } } }, T0 + 2000),
+    ).toBeNull();
+    m = applyCommand(
+      m,
+      'match.update',
+      { patch: { rules: { useShotClock: true } } },
+      T0 + 2000,
+    ).match;
+    expect(m.rules.useShotClock).toBe(true);
+  });
+
+  it('已经开着进攻钟时,再发一次"开"不会被拒(那是空操作)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    expect(
+      rejectReason(m, 'match.update', { patch: { rules: { useShotClock: true } } }, T0 + 1000),
+    ).toBeNull();
+  });
+
+  it('运行中【关掉】进攻钟是允许的(校赛临时改规矩)', () => {
+    let m = freshMatch();
+    m = applyCommand(m, 'clock.start', {}, T0).match;
+    expect(
+      rejectReason(m, 'match.update', { patch: { rules: { useShotClock: false } } }, T0 + 1000),
+    ).toBeNull();
   });
 });

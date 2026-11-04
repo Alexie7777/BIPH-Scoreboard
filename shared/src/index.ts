@@ -463,6 +463,25 @@ export function shotClockEnabled(m: { rules?: { useShotClock?: boolean } | null 
   return m.rules?.useShotClock !== false;
 }
 
+/**
+ * 现在能不能**在配置页开启**进攻钟。
+ *
+ * 比赛钟在跑的时候**不许开**:
+ *   - 进攻钟数的是**比赛时间** —— 表已经在走了,这时把它拉起来,两个钟对不上;
+ *   - 开球那一刻的"满 24 秒起步"也没法给(球权早就开始了)。
+ * 要开,顺序是:**先暂停比赛钟 → 勾上「使用进攻钟」→ 再按「开始比赛」**。
+ *
+ * 注意这条**只管"开启"**:
+ *   - 已经开着的时候**可以关**(校赛临时决定不打 24 秒,正是这个场景);
+ *   - 运行中用控制台的「重置并开表」把进攻钟拉起来,也不受这条限制
+ *     —— 那是计分员在场上做的事,不是配置开关。
+ *
+ * 服务端与客户端共用这一份判定:界面上灰掉、服务端也拒掉,两边口径必须一样。
+ */
+export function canTurnOnShotClock(opts: { clockRunning: boolean; useShotClock: boolean }): boolean {
+  return !(opts.clockRunning && !opts.useShotClock);
+}
+
 export const TEMPLATE_IDS: TemplateId[] = ['simple', 'led', 'broadcast'];
 
 /* ============================ 时钟数学 ============================

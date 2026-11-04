@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { Locale, Match, MatchRules, Presentation, StartMode, SportId, Team } from '@biph/shared';
-import { DEFAULT_HALFTIME_MINUTES, DEFAULT_TIMEOUT_SECONDS, SPORT_IDS, defaultRulesFor, isFootball, resolveSport } from '@biph/shared';
+import { DEFAULT_HALFTIME_MINUTES, DEFAULT_TIMEOUT_SECONDS, SPORT_IDS, canTurnOnShotClock, defaultRulesFor, isFootball, resolveSport } from '@biph/shared';
 import {
   buildControlUrl,
   buildDisplayUrl,
@@ -29,6 +29,7 @@ import {
 import { describeContrast } from '../lib/colors';
 import { formatStartCountdownInput, parseStartCountdown, resolveStartMode } from '../lib/format';
 import { sportEmoji, sportLabel } from '../lib/sports';
+import { useClockRunning } from '../lib/useClockRunning';
 import { formatClockTime, setScopedLocale, useI18n } from '../i18n';
 import { AdminKeyPrompt } from '../components/AdminKeyPrompt';
 import { CountdownPicker } from '../components/CountdownPicker';
@@ -259,6 +260,15 @@ export default function MatchSetup() {
   const cdPickerWrapRef = useRef<HTMLDivElement | null>(null);
 
   const matchId = id ?? '';
+
+  /*
+   * 比赛钟是不是在跑(实时)。
+   *
+   * 配置页只在打开时拉一次全量,之后状态就旧了 —— 而「使用进攻钟」能不能勾
+   * 恰恰取决于此刻比赛钟在不在跑(见 FR-3.10)。
+   * 所以这里单独订阅一份实时状态。
+   */
+  const clockRunning = useClockRunning(matchId);
 
   /**
    * t 随语言变化换引用。若把 t 放进 load 的依赖里,每次切语言都会重跑 load,
@@ -727,6 +737,18 @@ export default function MatchSetup() {
     );
   }
 
+  /*
+   * 「使用进攻钟」这个开关现在能不能勾。
+   *
+   * 比赛钟在跑的时候不许**开启**(进攻钟数的是比赛时间,这时拉起来两个钟对不上),
+   * 但**关掉**随时都行 —— 校赛临时改规矩正是这个场景。
+   * 判定与服务端同一份(canTurnOnShotClock),避免界面和服务端各说各话。
+   */
+  const shotClockCanBeTurnedOn = canTurnOnShotClock({
+    clockRunning,
+    useShotClock: draft.rules.useShotClock,
+  });
+
   /**
    * 管理员密钥的说明块。
    *
@@ -1046,15 +1068,30 @@ export default function MatchSetup() {
               */}
               {football ? null : (
                 <>
-                  <label className="switch">
-                    <input
-                      id="use-shot-clock"
-                      type="checkbox"
-                      checked={draft.rules.useShotClock}
-                      onChange={(e) => toggleRule({ useShotClock: e.target.checked })}
-                    />
-                    {t('setup.switch.shot')}
-                  </label>
+                  {/*
+                    提示放在自己那个开关的正下方,不占同一行的位置 ——
+                    挤在旁边的开关中间会把整行布局挤歪。
+                  */}
+                  <div className="switch-item">
+                    <label className="switch">
+                      <input
+                        id="use-shot-clock"
+                        type="checkbox"
+                        checked={draft.rules.useShotClock}
+                        /*
+                         * 比赛钟在跑的时候不许【开启】进攻钟 —— 但仍然可以【关掉】。
+                         * 关掉是校赛临时改规矩(不打 24 秒)的正当操作,
+                         * 灰掉整个开关会连关都关不了。
+                         */
+                        disabled={!shotClockCanBeTurnedOn}
+                        onChange={(e) => toggleRule({ useShotClock: e.target.checked })}
+                      />
+                      {t('setup.switch.shot')}
+                    </label>
+                    {shotClockCanBeTurnedOn ? null : (
+                      <small className="field-hint blocked">{t('setup.switch.shot.locked')}</small>
+                    )}
+                  </div>
                   <label className="switch">
                     <input
                       type="checkbox"

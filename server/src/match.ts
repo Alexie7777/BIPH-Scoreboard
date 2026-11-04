@@ -4,6 +4,7 @@ import {
   MAX_ADDED_TIME_SECONDS,
   MAX_START_COUNTDOWN_MS,
   buildPeriodLabel,
+  canTurnOnShotClock,
   defaultRulesFor,
   formatAddedTime,
   halftimeDurationMs,
@@ -899,6 +900,24 @@ export function rejectReason(
       const st = patch.startTime;
       if (st !== undefined && st !== null && !isValidStartTime(st)) {
         return '开赛时间格式应为 HH:MM';
+      }
+      /*
+       * 比赛钟在跑的时候**不许开启**进攻钟。
+       *
+       * 进攻钟数的是比赛时间:表已经在走了这时把它拉起来,两个钟对不上,
+       * 而且开球那一下的"满 24 秒起步"也没法给(球权早就开始了)。
+       * 要开:先暂停比赛钟 → 勾上 → 再按「开始比赛」。
+       *
+       * 只管"开启":已经开着时运行中**可以关**(校赛临时改规矩);
+       * 控制台的「重置并开表」也不受这条限制 —— 那是场上做的事,不是配置开关。
+       */
+      const rulePatch = patch.rules as { useShotClock?: unknown } | undefined;
+      if (
+        rulePatch &&
+        rulePatch.useShotClock === true &&
+        !canTurnOnShotClock({ clockRunning: m.clock.running, useShotClock: m.rules.useShotClock })
+      ) {
+        return '比赛钟在跑,先暂停比赛钟再开启进攻钟';
       }
       // 开赛模式只认这两个值,别的当成脏数据
       const mode = patch.startMode;
